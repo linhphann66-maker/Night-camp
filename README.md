@@ -90,11 +90,19 @@ Sửa thao tác rig và nhập ảnh tách mảnh:
 - Editor tắt hiệu chỉnh cầm kiếm tự động khi chỉnh tay. Khớp chân đi theo thân
   nghiêng; renderer hỗ trợ `overlap` để chồng mép ở vai/hông, cùng các điểm
   `elbow`/`knee` tùy chỉnh. Đổi kích thước ảnh đồng thời co giãn các điểm khớp.
-- Tải ảnh PNG/WebP và bật **Tự cắt các mảnh rời**: Studio tìm các vùng tách nhau
-  bằng alpha hoặc nền phẳng. Xem trước, lọc bụi/gộp vùng, chọn vai trò cho mảnh
-  rồi lưu vào tài nguyên project hoặc gán cho đầu/thân/tay/chân. Không tự suy
-  đoán giải phẫu hay cắt bộ phận còn dính liền. Ảnh phân tích thu về tối đa
-  2048 px cạnh dài; chọn Trong suốt để giữ vùng trắng của hình khi cần.
+- Tải ảnh PNG/WebP/JPG và bật **Tự cắt các mảnh rời**: Studio chỉ xóa nền cùng
+  màu thông ra mép ảnh, không xóa toàn bộ màu trắng bên trong tóc/lông/áo.
+  Có thể chỉnh độ lệch màu nền, lọc bụi, phân tích lại hoặc gộp vùng. Giữ ảnh
+  gốc tối đa 4 triệu pixel; ảnh vượt giới hạn được thu nhỏ và báo kích thước.
+  Vai trò đầu/thân/tay/chân được lưu cùng từng tài nguyên, không mặc định tất
+  cả là đầu. Tài nguyên cũ chưa có vai trò chỉ được gợi ý từ tên rõ ràng.
+  Trong thư viện có checkbox chọn nhiều mảnh và **Gán các mảnh đã chọn**;
+  gán một mảnh không đóng thư viện. Mặc định chọn bản mới nhất cho mỗi bộ
+  phận; các lựa chọn trùng đích được báo lỗi, không ghi đè âm thầm. Gán hàng
+  loạt là một bước Hoàn tác, không đổi kích thước/khớp hay animation hiện có.
+  Không tự suy đoán giải phẫu hoặc tách phần còn dính nhau; phần trắng nối
+  thẳng ra nền vẫn có thể cần chỉnh ngưỡng/chuẩn bị nền trong suốt. Mảnh đã
+  khoét mất chi tiết ở bản cũ phải cắt lại từ ảnh gốc, không tự phục hồi.
 - Bộ renderer riêng được tạo bởi `node tools/build-cutout-runtime.mjs`; dùng
   cùng renderer cho Studio và demo. Công cụ giải nén bundle kèm runtime này để
   các khớp và độ chồng mép được giữ khi tích hợp vào game khác.

@@ -9,6 +9,9 @@ export function mountAccessories(actions){
  document.querySelector('.library').append(panel);
  const shortcut=el('button','♧ Phụ kiện');shortcut.id='jumpAccessories';shortcut.onclick=()=>panel.scrollIntoView({block:'start',behavior:'smooth'});document.querySelector('header nav').prepend(shortcut);
  const $=id=>panel.querySelector('#'+id);let catalog=[],selected=null,previewRect=null,previewVersion=0,previewImage=null,drag=null;
+ $('attachmentSocket').add(new Option('Lưng / cánh','back'));
+ $('attachmentList').insertAdjacentHTML('afterend','<button id="editWingRig" hidden>✧ Thiết kế xương & animation cánh</button>');
+ $('editWingRig').onclick=()=>document.getElementById('wingStudioButton').click();
  $('attachmentList').insertAdjacentHTML('afterend','<button id="restoreGlassesSizes">↶ Khôi phục cỡ kính bị thu nhỏ</button><p>Khôi phục hàng loạt kính còn đúng cỡ mặc định bị lỗi của bản trước. Bỏ qua cỡ đã chỉnh tay hoặc đổi tỷ lệ. Có thể Hoàn tác.</p>');
  $('attachmentPreview').insertAdjacentHTML('beforebegin','<button id="fitGlasses">◎ Căn kính vào mắt · giữ nguyên cỡ</button><p>Chọn loại Kính trước khi tải ảnh. Điểm neo trên kính sẽ trùng điểm gắn trên mặt; dùng Lệch X/Y hoặc bật kéo phụ kiện để căn thêm. Căn neo không đổi Rộng/Cao, Tỷ lệ hoặc Góc.</p>');
  $('attachmentPreview').insertAdjacentHTML('afterend','<p>Kéo dấu cộng lên cầu kính (giữa hai tròng). Ảnh mới được bỏ viền trong suốt tự động; ảnh đã lưu giữ nguyên dữ liệu.</p>');
@@ -21,11 +24,14 @@ export function mountAccessories(actions){
  function drawPreview(anchor=current()?.anchor){if(!previewImage||!anchor)return;const canvas=$('attachmentPreview'),ctx=canvas.getContext('2d'),{x,y,w,h}=previewRect;ctx.clearRect(0,0,250,190);ctx.drawImage(previewImage,x,y,w,h);ctx.strokeStyle='#e5f9a9';ctx.lineWidth=2;const px=x+anchor[0]*w,py=y+anchor[1]*h;ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.moveTo(px-10,py);ctx.lineTo(px+10,py);ctx.moveTo(px,py-10);ctx.lineTo(px,py+10);ctx.stroke()}
  async function mutate(fn){const items=structuredClone(list());fn(items);validateAttachments(items);await actions.set(items);await refresh()}
  function library(){const q=$('accessorySearch').value.trim().toLowerCase(),type=$('accessoryCategory').value;options($('accessoryCatalog'),catalog.filter(a=>a.category===type&&(a.name+' '+a.id).toLowerCase().includes(q)).map(a=>[a.id,a.id+' · '+a.name]));if(actions.project())hatFitting.refresh().catch(error=>actions.message(error.message))}
- async function refresh(){options($('attachmentList'),list().map(a=>[a.id,(a.visible===false?'○ ':'● ')+a.name]));if(!current())selected=list()[0]?.id||null;$('attachmentList').value=selected||'';const a=current();$('accessorySettings').hidden=!a;if(!a){await hatFitting.refresh();return}
+ async function refresh(){options($('attachmentList'),list().map(a=>[a.id,(a.visible===false?'○ ':'● ')+a.name]));if(!current())selected=list()[0]?.id||null;$('attachmentList').value=selected||'';const a=current();$('accessorySettings').hidden=!a;$('editWingRig').hidden=!a?.wingRig;if(!a){await hatFitting.refresh();return}
   $('attachmentVisible').checked=a.visible!==false;$('attachmentSocket').value=a.socket;$('attachmentLayer').value=a.layer;
+  const wing=!!a.wingRig;$('editWingRig').hidden=!wing;$('attachmentSocket').disabled=$('attachmentLayer').disabled=wing;
+  for(const id of ['attachmentW','attachmentAX'])$(id).closest('.pair').hidden=wing;
+  $('attachmentPreview').hidden=$('fitGlasses').hidden=wing;
   for(const [field,key]of [['X','x'],['Y','y'],['W','w'],['H','h'],['Scale','scale']])$('attachment'+field).value=Number(a[key].toFixed(3));
   $('attachmentRotation').value=Number((a.rotation*180/Math.PI).toFixed(2));$('attachmentAX').value=a.anchor[0];$('attachmentAY').value=a.anchor[1];
-  previewRect=null;previewImage=null;const version=++previewVersion,img=await actions.image(a.src);if(version!==previewVersion||current()?.id!==a.id)return;previewImage=img;previewRect=imageRect(img.naturalWidth,img.naturalHeight);drawPreview();await hatFitting.refresh();
+  previewRect=null;previewImage=null;const version=++previewVersion;if(wing){await hatFitting.refresh();return}const img=await actions.image(a.src);if(version!==previewVersion||current()?.id!==a.id)return;previewImage=img;previewRect=imageRect(img.naturalWidth,img.naturalHeight);drawPreview();await hatFitting.refresh();
  }
  $('accessorySearch').oninput=library;$('accessoryCategory').onchange=library;$('attachmentList').onchange=safe(async()=>{selected=$('attachmentList').value;await refresh()});
  $('addAccessory').onclick=safe(async()=>{if(!actions.project())return;const entry=catalog.find(a=>a.id===$('accessoryCatalog').value);if(!entry)throw Error('Chọn một món trong thư viện');const a=makeAttachment(entry,actions.headWidth());await actions.image(a.src);selected=a.id;await mutate(items=>items.push(a));actions.message('Đã gắn '+a.name+'. Có thể chỉnh điểm neo và độ lệch.')});

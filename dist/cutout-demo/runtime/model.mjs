@@ -34,6 +34,9 @@ export function gameExport(project) {
   const rig=project.rig.replace(/[^a-zA-Z0-9_-]/g,'_')||'custom_rig';
   const sprites={}; const images=[];
   for(const part of PARTS){const s=structuredClone(project.parts[part]);if(s.src.startsWith('data:')){const ext=s.src.startsWith('data:image/webp')?'webp':'png';const file=`rig_${rig}_${part}.${ext}`;images.push({file,data:s.src});s.src='assets/'+file}sprites[`rig_${rig}_${part}`]=s}
-  const attachments=(project.attachments||[]).map((item,index)=>{const a=structuredClone(item),name=`accessory_${rig}_${index}`;if(a.src.startsWith('data:')){const ext=a.src.startsWith('data:image/webp')?'webp':'png',file=name+'.'+ext;images.push({file,data:a.src});a.src='assets/'+file}sprites[name]={src:a.src,w:a.w,h:a.h,ax:0,ay:0};a.sprite=name;return a});
+  const attachments=(project.attachments||[]).map((item,index)=>{const a=structuredClone(item),name=`accessory_${rig}_${index}`;
+    const register=(s,key)=>{if(s.src.startsWith('data:')){const ext=s.src.startsWith('data:image/webp')?'webp':'png',file=key+'.'+ext;images.push({file,data:s.src});s.src='assets/'+file}sprites[key]={src:s.src,w:s.w,h:s.h,ax:0,ay:0};s.sprite=key};
+    if(a.wingRig)for(const id of a.wingRig.spriteOrder)register(a.wingRig.sprites[id],name+'_'+id);else register(a,name);
+    return a});
   return {id,rig,images,attachments,code:`// Load after assets/manifest.js and js/poselib_data.js, before sprite loading and js/poselib.js.\nwindow.NC = window.NC || {};\nNC.ASSET_MANIFEST = Object.assign(NC.ASSET_MANIFEST || {}, ${JSON.stringify(sprites,null,2)});\nNC.POSE_LIB = Object.assign(NC.POSE_LIB || {}, ${JSON.stringify({[id]:clip},null,2)});\nNC.RIG_ATTACHMENTS = Object.assign(NC.RIG_ATTACHMENTS || {}, ${JSON.stringify({[rig]:attachments},null,2)});\n`};
 }

@@ -11,13 +11,15 @@ import {screenDelta} from './attachments.mjs';
 import {mountMobileNavigation} from './mobile-ui.mjs';
 import {importPoseClip,poseClipDescription} from './pose-library.mjs';
 import {mountPetEditor} from './pet-entry.mjs';
+import {mountWingEditor} from './wing-entry.mjs';
+import {loadAttachmentSprites,attachmentImages} from './wings.mjs';
 const $=id=>document.getElementById(id), NC=window.NC;
 let source, libraryUI;
 const status=msg=>$('status').textContent=msg;
 const labels={head:'Đầu',torso:'Thân',armF:'Tay gần',armB:'Tay xa',legF:'Chân gần',legB:'Chân xa'};
 const channels={lean:'Nghiêng thân',head:'Góc đầu',aF:'Tay gần',eF:'Khuỷu gần',aB:'Tay xa',eB:'Khuỷu xa',legF:'Đùi gần',kF:'Gối gần',legB:'Đùi xa',kB:'Gối xa',wAng:'Góc vũ khí',x:'Dịch X',y:'Dịch Y',headY:'Dịch đầu Y'};
 const angular=k=>!['x','y','headY'].includes(k);
-const state={project:null,pose:null,time:0,key:0,playing:false,undo:[],redo:[],images:new Map(),zoom:3,face:1,part:'torso'};
+const state={project:null,pose:null,time:0,attachmentTime:0,key:0,playing:false,undo:[],redo:[],images:new Map(),zoom:3,face:1,part:'torso'};
 let catalog, drawError=false, jointPositions={},anchorRect;
 const ctx=$('stage').getContext('2d'), ac=$('anchor').getContext('2d');
 $('upload').insertAdjacentHTML('afterend','<label><input id="autoSlice" type="checkbox" checked> Tự cắt các mảnh rời khi tải ảnh</label><button id="resources">▦ Tài nguyên đã cắt (0)</button>');
@@ -31,7 +33,7 @@ function options(el,rows){el.replaceChildren(...rows.map(([value,text])=>{const 
 function checkpoint(){state.undo.push(JSON.stringify(state.project));if(state.undo.length>60)state.undo.shift();state.redo=[]}
 function persist(){try{localStorage.setItem('nightcamp.cutout.v1',JSON.stringify(state.project));status('Đã lưu nháp trong trình duyệt')}catch{status('Bộ nhớ nháp đầy. Bấm Lưu project để tải bản sao.')}}
 async function image(src){if(state.images.has(src))return state.images.get(src);const promise=new Promise((resolve,reject)=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>resolve(im);im.onerror=()=>reject(Error('Không tải được ảnh '+src.slice(0,100)));im.src=source.assetURL(src)});state.images.set(src,promise);try{return await promise}catch(e){state.images.delete(src);throw e}}
-async function portableProject(){const p=structuredClone(state.project);await Promise.all([...Object.values(p.parts),...(p.attachments||[])].map(async s=>{if(s.src.startsWith('data:'))return;const img=await image(s.src),canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;canvas.getContext('2d').drawImage(img,0,0);s.src=canvas.toDataURL('image/png')}));return p}
+async function portableProject(){const p=structuredClone(state.project);await Promise.all(attachmentImages(p).map(async s=>{if(s.src.startsWith('data:'))return;const img=await image(s.src),canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;canvas.getContext('2d').drawImage(img,0,0);s.src=canvas.toDataURL('image/png')}));return p}
 async function syncRig(){
   const p=state.project;
   ensureMiddleJoints(p.parts);
@@ -39,14 +41,14 @@ async function syncRig(){
   // Use a fresh rig name to avoid the original renderer's rig cache after anchor edits.
   const name='studio'+(++syncRig.seq);for(const part of PARTS)NC.SPR[`rig_${name}_${part}`]=NC.SPR['rig_studio_'+part];
   state.equip={top:'studio_top',weapon:'studio_weapon'};NC.ITEMS.studio_top={rig:name};NC.ITEMS.studio_weapon={grip:.12,wtype:'sword',sprite:'studio_sword',restAng:1.2,stance:-.7};
-  NC.ITEMS.studio_top.attachments=await Promise.all((p.attachments||[]).map(async(a,i)=>{const id=name+'_attachment_'+i;NC.SPR[id]={name:id,img:await image(a.src)};return {...a,sprite:id}}));
+  NC.ITEMS.studio_top.attachments=await loadAttachmentSprites(p.attachments,image,(id,img)=>{NC.SPR[id]={name:id,img}},name);
   state.rig=NC.getRig(name);drawError=false;
   NC.GRIPFIX=false;
   NC.BendCache.on=false;
 }
 syncRig.seq=0;
 function animationContext(t){return NC.animCtx(state.equip,{walk:t*Math.PI*2,moving:true})}
-function setPose(){state.pose=sample(state.project.clip,state.time);renderChannels()}
+function setPose(){state.pose=sample(state.project.clip,state.time);if(!state.playing)state.attachmentTime=state.time;renderChannels()}
 function renderChannels(){for(const k of Object.keys(channels)){const n=$('ch_'+k);n.value=Number(((state.pose[k]||0)*(angular(k)?180/Math.PI:1)).toFixed(2))}}
 function renderKeys(){const c=state.project.clip;$('keys').replaceChildren(...c.keys.map((k,i)=>{const b=document.createElement('button');b.textContent=(i+1)+' · '+k.t.toFixed(2)+'s';b.classList.toggle('selected',i===state.key);b.setAttribute('aria-pressed',String(i===state.key));b.title='Frame '+(i+1);b.onclick=()=>selectKey(i);return b}));$('scrub').max=c.dur;$('scrub').value=state.time;$('keyTime').value=c.keys[state.key]?.t??0;$('curve').value=c.keys[state.key]?.curve||'inout';$('clock').textContent=state.time.toFixed(2)+' s'}
 function pausePlayback(){state.playing=false;$('play').textContent='▶ Phát'}
@@ -78,6 +80,7 @@ mountTimelineTools({
  },
 });
 mountPetEditor(pausePlayback);
+mountWingEditor({pause:pausePlayback,project:()=>state.project,portable:portableProject,current:()=>accessoryUI.selected(),set:async items=>{validate({...state.project,attachments:items});checkpoint();state.project.attachments=items;await syncRig();await accessoryUI.refresh();persist()},message:status});
 mountMobileNavigation();
 for(const [k,label] of Object.entries(channels)){const row=document.createElement('div');row.className='channel';const l=document.createElement('label');l.htmlFor='ch_'+k;l.textContent=label;const n=document.createElement('input');n.type='number';n.step=angular(k)?1:.5;n.id='ch_'+k;row.append(l,n);$('channels').append(row);n.onchange=()=>{if(!Number.isFinite(n.valueAsNumber))return;state.playing=false;state.pose[k]=n.valueAsNumber*(angular(k)?Math.PI/180:1);status('Pose chưa ghi — bấm Ghi pose để lưu vào clip')}}
 options($('part'),PARTS.map(p=>[p,labels[p]]));
@@ -106,7 +109,7 @@ event('loadClip','click',()=>{
  $('existingClipInfo').textContent=description+(notes.length?'. '+notes.join('. '):'')+'.';
  status('Đã nạp '+clip.name+' · '+clip.keys.length+' key'+(notes.length?' · '+notes.join('. '):''));
 });
-event('save','click',async()=>{validate(state.project);const p=await portableProject();download(p.rig+'.cutout.json',JSON.stringify(p,null,2));status('Đã lưu project kèm đủ sáu ảnh; mở lại không cần kho ảnh GitHub.')});
+event('save','click',async()=>{validate(state.project);const p=await portableProject();download(p.rig+'.cutout.json',JSON.stringify(p,null,2));status('Đã lưu project kèm ảnh, phụ kiện và rig cánh; mở lại không cần kho ảnh GitHub.')});
 event('open','click',()=>$('projectFile').click());event('projectFile','change',async()=>{const f=$('projectFile').files[0];if(!f)return;if(f.size>30*1024*1024)throw Error('Project tối đa 30 MB');const p=validate(JSON.parse(await f.text()));checkpoint();await adopt(p);$('projectFile').value=''});
 const sheetImporter=mountSheetImporter({store:async(resources,assignments,updates=[])=>{const p=applyResourceChanges(state.project,resources,assignments,updates);validate(p);checkpoint();state.project=p;await syncRig();renderPart();persist();status('Đã lưu vai trò tài nguyên và gán '+Object.keys(assignments).length+' bộ phận. Chỉnh kích thước/điểm neo nếu cần.')}});
 event('resources','click',()=>sheetImporter.gallery(state.project.resources));
@@ -136,14 +139,14 @@ function render(){
  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,r.width,r.height);const x=r.width/2,y=r.height*.78;
  ctx.strokeStyle='#344253';ctx.lineWidth=1;for(let gx=x%40;gx<r.width;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,r.height);ctx.stroke()}
  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(r.width,y);ctx.stroke();if(!state.rig||drawError)return;
- try{const P={...state.pose,face:state.face},scale=previewScale(r);NC.drawRig(ctx,state.rig,state.equip,P,x,y,{scale,noWeapon:true});jointPositions=NC.rigJoints(state.equip,P,x,y,scale);
+ try{const P={...state.pose,face:state.face,attachmentTime:state.attachmentTime},scale=previewScale(r);NC.drawRig(ctx,state.rig,state.equip,P,x,y,{scale,noWeapon:true});jointPositions=NC.rigJoints(state.equip,P,x,y,scale);
   if($('bones').checked){ctx.strokeStyle='#d3ed9299';ctx.lineWidth=1.5;for(const chain of chains){ctx.beginPath();chain.forEach((key,i)=>ctx[i?'lineTo':'moveTo'](...jointPositions[key]));ctx.stroke()}
    for(const [name,p] of Object.entries(jointPositions)){if(name==='wHand'||name==='wTip')continue;ctx.fillStyle='#d3ed92';ctx.beginPath();ctx.arc(...p,3.5,0,7);ctx.fill()}
   }drawAnchor();
  }catch(e){drawError=true;status('Lỗi render: '+e.message);console.error(e)}
 }
 function drawJointHints(){if(!$('bones').checked||!state.rig||drawError)return;ctx.save();ctx.lineWidth=2;ctx.strokeStyle='#ffbe84';for(const limb of Object.values(LIMBS)){const p=jointPositions[limb.middle];if(p){ctx.beginPath();ctx.arc(...p,7,0,Math.PI*2);ctx.stroke()}}ctx.restore()}
-let last=0;function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;if(state.playing&&state.project){const c=state.project.clip;state.time+=dt*+$('speed').value;if(state.time>c.dur){if(c.kind==='loop'||c.kind==='walk')state.time%=c.dur;else{state.time=c.dur;state.playing=false;$('play').textContent='▶ Phát'}}setPose();$('scrub').value=state.time;$('clock').textContent=state.time.toFixed(2)+' s'}if(!$('petStudioDialog')?.open){render();drawJointHints()}requestAnimationFrame(frame)}
+let last=0;function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;if(state.playing&&state.project){const c=state.project.clip;state.time+=dt*+$('speed').value;state.attachmentTime+=dt*+$('speed').value;if(state.time>c.dur){if(c.kind==='loop'||c.kind==='walk')state.time%=c.dur;else{state.time=c.dur;state.playing=false;$('play').textContent='▶ Phát'}}setPose();$('scrub').value=state.time;$('clock').textContent=state.time.toFixed(2)+' s'}if(!$('petStudioDialog')?.open&&!$('wingStudioDialog')?.open){render();drawJointHints()}requestAnimationFrame(frame)}
 async function reloadSource(){
   status('Đang đọc thư viện…');
   const next=await connectSource();source=next;catalog=next.catalog;NC.POSE_LIB=next.poses;state.images.clear();

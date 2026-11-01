@@ -7,6 +7,9 @@ cùng một địa chỉ. Trạng thái chiến đấu, vật phẩm và tiến 
 Repo GitHub hiện tại: <https://github.com/linhphann66-maker/Night-camp>.
 Deployment Railway/VPS có thể dùng trực tiếp nhánh `main`.
 
+Studio hiện có **Cánh & rig**: dựng khung cánh riêng, gán ảnh, tạo animation,
+preview sau lưng nhân vật và xuất sang demo. Xem [hướng dẫn cánh](dist/studio/WINGS.md).
+
 ## Chạy bằng Node.js 22 trở lên
 
 ```bash

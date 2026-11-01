@@ -1,18 +1,21 @@
 import {PARTS} from './model.mjs';
 import {inversePoint} from './pets/runtime.mjs';
+// A stable authoring mannequin, never the parent's current attack/run frame.
+// Do not write this pose back to the hero or to any wing animation.
+export function wingIdlePose(NC,equip){return {...NC.Anim.setup(NC.animCtx(equip,{})),face:1,legF:0,legB:0,kF:0,kB:0,eF:.06,eB:.06,wHide:1}}
 // The authoring coordinates are centered on the actual back socket, not an
 // approximation of the face/torso image. Preview and exported player agree.
 export async function mountWingPreview(image){
  window.NC={SPR:{},ITEMS:{},clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),lerp:(a,b,t)=>a+(b-a)*t};
  for(const file of ['anim.js','avatar.js'])await new Promise((ok,no)=>{const s=document.createElement('script');s.src=new URL('runtime/'+file,import.meta.url).href;s.onload=ok;s.onerror=()=>no(Error('Không tải được bộ phát preview cánh'));document.head.append(s)});
  const NC=window.NC;let hero=null,serial=0;
- const label=document.createElement('label');label.innerHTML='<input id="wingHeroPreview" type="checkbox" checked> Nhân vật';document.querySelector('.viewbar').append(label);
+ const label=document.createElement('label');label.innerHTML='<input id="wingHeroPreview" type="checkbox" checked> Nhân vật · idle';label.title='Đứng thẳng, tay thả xuống; chỉ đổi preview, không sửa animation nhân vật';document.querySelector('.viewbar').append(label);
  return {
   async load(project,attachment){
    const id='wingpreview'+ ++serial;
    await Promise.all(PARTS.map(async part=>{const s=project.parts[part];NC.SPR['rig_'+id+'_'+part]={...s,img:await image(s.src)}}));
    const equip={top:id+'_top',weapon:id+'_weapon'};NC.ITEMS[equip.top]={rig:id};NC.ITEMS[equip.weapon]={restAng:1.2,stance:-.7,grip:.12,wtype:'sword'};const rig=NC.getRig(id);
-   const P={...NC.Anim.setup(NC.animCtx(equip,{})),...project.clip.keys[0].P,face:1};
+   const P=wingIdlePose(NC,equip);
    NC.GRIPFIX=false;NC.BendCache.on=false;
    const m=NC.attachmentMatrix(equip,P,attachment||{socket:'back',x:0,y:0,rotation:0,scale:1},0,0,1),M=[m.a,m.b,m.c,m.d,m.e,m.f],o=inversePoint(M,0,0),u=inversePoint(M,1,0),v=inversePoint(M,0,1),inv=[u[0]-o[0],u[1]-o[1],v[0]-o[0],v[1]-o[1],...o];
    const js=Object.values(NC.rigJoints(equip,P,0,0,1)).map(p=>inversePoint(M,...p));

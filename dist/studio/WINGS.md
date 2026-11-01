@@ -58,6 +58,22 @@ quét về sau lưng**. Khung/keyframe gốc được giữ nguyên; không tự
 góc của tất cả frame. Có thể chọn **Chính diện** để quay về khung ảnh gốc.
 
 Trong **Góc cánh theo nhân vật**, chỉnh góc xoay, cỡ cánh xa và độ quét lên.
+Tỷ lệ mặc định mới là **0.96**: cánh xa nhỏ hơn cánh gần 4% trên cùng mặt
+phẳng chiếu. Không nhân thêm cos(góc) cho cánh xa nữa. Thiết lập mặc định cũ
+`55° / 0.72 / 0.15` được sửa một lần khi mở; tỷ lệ bạn chỉnh riêng vẫn được
+giữ. `wingView.version: 2` giữ nguyên các lựa chọn mới qua lưu/mở lại.
+
+Nếu ảnh cánh xa trong sheet vốn nhỏ hơn ảnh cánh gần, dùng **Cân gần–xa ·
+xa nhỏ hơn 4%** ở chế độ Dựng rig. Với rig rời cần đúng một gốc Cánh gần và
+một gốc Cánh xa (các đoạn khác là xương con). Công cụ cân độ vươn trong tư
+thế gốc bằng tỷ lệ xương gốc cánh xa; không đổi ảnh, điểm gắn hay các keyframe.
+Có thể Hoàn tác. Nên so hai cánh ở cùng tư thế mở/gập; không dùng phép cân
+để ép một ảnh cánh gập thành hình cánh đang mở.
+
+Nhân vật nền trong editor cánh luôn đứng **idle trung tính**, tay thả xuống,
+chân đứng vững, không lấy frame đầu của clip đang mở ở Studio nhân vật.
+Đây chỉ là preview để căn cánh; không sửa animation nhân vật hoặc cánh.
+
 Đặt **Vai trò xương cánh** ở đầu mỗi nhánh: gần, xa, gốc giữa hoặc ảnh nguyên
 đôi cánh chính diện. Xương con để **Theo xương cha** để không chiếu phối cảnh
 hai lần. Cánh xa được vẽ trước cánh gần, cả hai vẫn sau nhân vật và lật theo

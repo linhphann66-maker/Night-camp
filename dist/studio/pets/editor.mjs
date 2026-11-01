@@ -3,7 +3,7 @@ import {blankClip,appendInheritedFrame,copyPoseToFrames} from '../timeline.mjs';
 import {validatePet,samplePet,poseBounds,drawPet,boneMatrices,inversePoint,point,multiply,spritePlanes} from './runtime.mjs';
 import {petHandles,pickPetHandle,beginPetDrag,dragPetBone,restoreBoneOffsets} from './rig-controls.mjs';
 import {createBlankPet,descendants,addPetBone,renamePetBone,renamePoseChannels,reparentPetBone,deletePetBone,setPetPivot,movePetBone,pivotAtWorld,rigBounds} from './rig-authoring.mjs';
-import {createWingCatalog,prepareWingProject} from '../wings.mjs';
+import {createWingCatalog,prepareWingProject,balanceWingSizes} from '../wings.mjs';
 import {mountWingPreview} from '../wing-preview.mjs';
 import {mountWingImporter} from '../wing-import.mjs';
 const wingMode=new URLSearchParams(location.search).get('mode')==='wings';
@@ -220,6 +220,8 @@ busy(true);safe(async()=>{
 if(wingMode){
  document.querySelector('[data-panel=rig] h2').insertAdjacentHTML('afterend','<section id="wingViewSettings"><h3>Góc cánh theo nhân vật</h3><label>Góc nhìn<select id="wingViewMode"><option value="three-quarter">3/4 · cánh quét về sau lưng</option><option value="front">Chính diện · khung ảnh gốc</option></select></label><div class="pair"><label>Góc xoay 3/4 (độ)<input id="wingYaw" type="number" min="10" max="80" step="1"></label><label>Cỡ cánh xa<input id="wingFarScale" type="number" min="0.25" max="1" step="0.05"></label></div><label>Độ quét lên (độ)<input id="wingSweep" type="number" min="-34" max="34" step="1"></label><p class="hint">Góc 3/4 thu ngắn cánh xa và quét cả đôi về phía sau; tự lật theo nhân vật. Khung xương và keyframe gốc không bị ghi đè.</p></section>');
  $('bone').closest('label').insertAdjacentHTML('afterend','<label>Vai trò xương cánh<select id="wingSide"><option value="">Theo xương cha</option><option value="center">Gốc giữa / không chiếu phối cảnh</option><option value="near">Cánh gần</option><option value="far">Cánh xa · vẽ sau cánh gần</option><option value="pair">Ảnh nguyên đôi cánh chính diện</option></select></label><label>Ảnh một cánh có ngọn hướng<select id="wingSource"><option value="left">Sang trái ←</option><option value="right">Sang phải →</option></select></label>');
+ $('wingViewSettings').insertAdjacentHTML('beforeend','<button id="balanceWingSizes">Cân gần–xa · xa nhỏ hơn 4%</button><p class="hint">Cỡ cánh xa mặc định 0.96 = 96% cánh gần. Nút cân còn bù ảnh cánh xa vốn nhỏ hơn trong tư thế gốc; chỉ đổi tỷ lệ xương gốc cánh xa, không sửa ảnh hoặc keyframe. Có thể Hoàn tác.</p>');
+ rigOnly.add('balanceWingSizes');on('balanceWingSizes','click',()=>{const result=balanceWingSizes(state.project);commitRig(result.project);message(result.resized?'Đã cân kích thước ảnh gần–xa, cánh xa chỉ nhỏ hơn 4%. Có thể Hoàn tác.':'Đã đặt cánh xa bằng 96% cánh gần; giữ nguyên cỡ ảnh và các frame.')});
  for(const id of ['wingViewMode','wingYaw','wingFarScale','wingSweep','wingSide','wingSource','wingAutoSlice','sliceCurrentWing','wingResources'])rigOnly.add(id);
  for(const [id,key]of [['wingViewMode','mode'],['wingYaw','yaw'],['wingFarScale','farScale'],['wingSweep','sweep']])on(id,'change',()=>mutate(p=>{p.wingView[key]=key==='mode'?$(id).value:$(id).valueAsNumber*(key==='sweep'?Math.PI/180:1)}));
  on('wingSide','change',()=>mutate(p=>{const b=p.bones.find(b=>b.id===state.bone);if($('wingSide').value)b.wingSide=$('wingSide').value;else delete b.wingSide}));

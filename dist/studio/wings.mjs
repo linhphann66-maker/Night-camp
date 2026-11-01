@@ -1,11 +1,11 @@
 // Wings use the same rigid FK/keyframe format as custom pets, but are equipped
 // as a back attachment. No inherited character bones, mesh or game globals.
-import {validatePet} from './pets/runtime.mjs';
-import {createBlankPet} from './pets/rig-authoring.mjs';
+import {validatePet,resolvedWingView,boneMatrices,point} from './pets/runtime.mjs';
+import {createBlankPet,descendants} from './pets/rig-authoring.mjs';
 export const EMPTY_IMAGE='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
-export const DEFAULT_WING_VIEW={mode:'three-quarter',yaw:55,farScale:.72,sweep:.15};
+export const DEFAULT_WING_VIEW={version:2,mode:'three-quarter',yaw:55,farScale:.96,sweep:.15};
 export function prepareWingProject(project){
- const p=structuredClone(project);p.wingView||={...DEFAULT_WING_VIEW};
+ const p=structuredClone(project);p.wingView=resolvedWingView(p.wingView)||{...DEFAULT_WING_VIEW};
  for(const b of p.bones)if(b.wingSide===undefined){
   if(b.id==='wing'&&p.id==='falcon_wings')b.wingSide='pair';
   else if(b.id==='wingLeft'){b.wingSide='near';b.wingSource='left'}
@@ -13,6 +13,19 @@ export function prepareWingProject(project){
   else if(b.sprite&&!p.bones.find(n=>n.id===b.parent)?.wingSide)b.wingSide='near';
  }
  return validatePet(p);
+}
+// Explicit rest-rig calibration for sheets where the far artwork itself was
+// painted smaller. Do not run on load: preserve hand-authored scales by default.
+export function balanceWingSizes(project,ratio=.96){
+ const p=prepareWingProject(project);p.wingView.farScale=ratio;p.wingView.version=2;
+ if(p.bones.some(b=>b.wingSide==='pair'&&b.sprite))return {project:validatePet(p),resized:false};
+ const roots=side=>p.bones.filter(b=>b.wingSide===side),near=roots('near'),far=roots('far');
+ if(near.length!==1||far.length!==1||descendants(p,near[0].id).has(far[0].id)||descendants(p,far[0].id).has(near[0].id))throw Error('Đặt đúng một gốc Cánh gần và một gốc Cánh xa, mỗi gốc chứa các đoạn con. Hoặc chọn vai trò Ảnh nguyên đôi cánh.');
+ const flat={...p,wingView:{...p.wingView,mode:'front'}},M=boneMatrices(flat,{});
+ const reach=root=>{const ids=descendants(p,root.id),origin=point(M[root.id],0,0);let max=0;for(const b of p.bones){const s=p.sprites[b.sprite];if(!ids.has(b.id)||!s||b.visible===false)continue;for(const x of [-b.pivot[0]*s.w,(1-b.pivot[0])*s.w])for(const y of [-b.pivot[1]*s.h,(1-b.pivot[1])*s.h]){const pt=point(M[b.id],x,y);max=Math.max(max,Math.hypot(pt[0]-origin[0],pt[1]-origin[1]))}}return max};
+ const a=reach(near[0]),b=reach(far[0]);if(a<1e-6||b<1e-6)throw Error('Gán ảnh cho cả cánh gần và cánh xa trước khi cân.');
+ const factor=a/b;if(Math.abs(factor-1)>1e-7)far[0].scale*=factor;
+ return {project:validatePet(p),resized:Math.abs(factor-1)>1e-7};
 }
 export function createWingCatalog(catalog){
  const blank=createBlankPet('custom_wings','Cánh mới');

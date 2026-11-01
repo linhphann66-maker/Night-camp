@@ -755,7 +755,7 @@ function validatePet(p){
  if(typeof p.id!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(p.id)||reserved.has(p.id)||typeof p.name!=='string'||!p.name.trim())fail('Tên / ID pet không hợp lệ');
  if(p.activeClipId!==undefined&&(typeof p.activeClipId!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(p.activeClipId)||reserved.has(p.activeClipId)))fail('ID clip không hợp lệ');
  if(!Number.isFinite(p.scale)||p.scale<=0||p.scale>10||!Array.isArray(p.bones)||!p.bones.length||p.bones.length>100)fail('Rig pet không hợp lệ');
- if(p.wingView){const v=p.wingView;if(!['front','three-quarter'].includes(v.mode)||!Number.isFinite(v.yaw)||v.yaw<10||v.yaw>80||!Number.isFinite(v.farScale)||v.farScale<.25||v.farScale>1||!Number.isFinite(v.sweep)||Math.abs(v.sweep)>.6)fail('Góc nhìn cánh không hợp lệ')}
+ if(p.wingView){const v=p.wingView;if(v.version!==undefined&&![1,2].includes(v.version)||!['front','three-quarter'].includes(v.mode)||!Number.isFinite(v.yaw)||v.yaw<10||v.yaw>80||!Number.isFinite(v.farScale)||v.farScale<.25||v.farScale>1||!Number.isFinite(v.sweep)||Math.abs(v.sweep)>.6)fail('Góc nhìn cánh không hợp lệ')}
  if(!p.sprites||!Array.isArray(p.spriteOrder)||p.spriteOrder.length>300||new Set(p.spriteOrder).size!==p.spriteOrder.length)fail('Danh mục ảnh không hợp lệ');
  for(const id of p.spriteOrder){const s=p.sprites[id];if(typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(id)||reserved.has(id)||!s||![s.w,s.h].every(v=>Number.isFinite(v)&&v>0&&v<=2000)||typeof s.src!=='string'||!(/^assets\/[\w./-]+\.(png|webp)$/.test(s.src)&&!s.src.split('/').includes('..')||/^data:image\/(png|webp);base64,[A-Za-z0-9+/=]+$/.test(s.src)))fail('Ảnh pet không hợp lệ: '+id)}
  const ids=new Set(p.bones.map(b=>b.id));if(ids.size!==p.bones.length)fail('Trùng ID xương');
@@ -781,10 +781,16 @@ function samplePet(clip,time){
 const multiply=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
 const point=(m,x,y)=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];
 function inversePoint(m,x,y){const d=m[0]*m[3]-m[1]*m[2];if(Math.abs(d)<1e-8)throw Error('Xương đang có tỷ lệ 0; tăng tỷ lệ trước khi kéo');return [(m[3]*(x-m[4])-m[2]*(y-m[5]))/d,(-m[1]*(x-m[4])+m[0]*(y-m[5]))/d]}
+// Only repair the exact old stock settings, once. Authored sizes and explicitly
+// selected v2 ratios (including .72) must survive save/reload unchanged.
+function resolvedWingView(view){if(!view)return view;const legacyDefault=(view.version??1)<2&&view.yaw===55&&view.farScale===.72&&view.sweep===.15;return {...view,version:view.version===undefined||view.version===1?2:view.version,farScale:legacyDefault ? .96 : view.farScale}}
 function wingProjection(p,b){
- const v=p.wingView;if(v?.mode!=='three-quarter'||!['near','far'].includes(b.wingSide))return [1,0,0,1,0,0];
+ const v=resolvedWingView(p.wingView);if(v?.mode!=='three-quarter'||!['near','far'].includes(b.wingSide))return [1,0,0,1,0,0];
  const far=b.wingSide==='far',sign=(b.wingSource||(far?'right':'left'))==='right'?-1:1,yaw=v.yaw*Math.PI/180;
- return [(far?Math.cos(yaw)*v.farScale:Math.sin(yaw))*sign,v.sweep*(far?1.5:1)*sign,0,far?v.farScale:1,far?-8:-2,far?-4:0];
+ const k=far?v.farScale:1;
+ // Both wings share the same view-plane foreshortening. The far wing differs
+ // only by its explicit size ratio, depth offset and draw order, not cos/sin.
+ return [Math.sin(yaw)*k*sign,v.sweep*k*sign,0,k,far?-8:-2,far?-4:0];
 }
 function boneParentMatrix(p,b,M,base=[1,0,0,1,0,0]){return multiply(b.parent?M[b.parent]:base,wingProjection(p,b))}
 function boneMatrices(p,pose,base=[1,0,0,1,0,0]){

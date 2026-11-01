@@ -1,10 +1,11 @@
 import {connectSource} from '../source.mjs';
 import {blankClip,appendInheritedFrame,copyPoseToFrames} from '../timeline.mjs';
-import {validatePet,samplePet,poseBounds,drawPet,boneMatrices,inversePoint,point} from './runtime.mjs';
+import {validatePet,samplePet,poseBounds,drawPet,boneMatrices,inversePoint,point,multiply,spritePlanes} from './runtime.mjs';
 import {petHandles,pickPetHandle,beginPetDrag,dragPetBone,restoreBoneOffsets} from './rig-controls.mjs';
 import {createBlankPet,descendants,addPetBone,renamePetBone,renamePoseChannels,reparentPetBone,deletePetBone,setPetPivot,movePetBone,pivotAtWorld,rigBounds} from './rig-authoring.mjs';
-import {createWingCatalog} from '../wings.mjs';
+import {createWingCatalog,prepareWingProject} from '../wings.mjs';
 import {mountWingPreview} from '../wing-preview.mjs';
+import {mountWingImporter} from '../wing-import.mjs';
 const wingMode=new URLSearchParams(location.search).get('mode')==='wings';
 const draftKey=wingMode?'nightcamp.wing.cutout.v1':'nightcamp.pet.cutout.v1';
 const terminology=text=>wingMode?text.replace(/thú cưng/gi,'cánh').replace(/pet/gi,'cánh'):text;
@@ -17,7 +18,7 @@ const options=(select,rows)=>select.replaceChildren(...rows.map(([id,label])=>ne
 const names={body:'Thân',head:'Đầu',tail:'Đuôi',tailA:'Gốc đuôi',tailB:'Ngọn đuôi',legF:'Chân trước gần',legFf:'Chân trước xa',legB:'Chân sau gần',legBf:'Chân sau xa',wingI:'Cánh trong gần',wingO:'Cánh ngoài gần',wingFi:'Cánh trong xa',wingFo:'Cánh ngoài xa',leg:'Chân gần',legf:'Chân xa',fold:'Cánh gập',flame:'Lửa đuôi',ring:'Vòng treo',frame:'Khung đèn',ghost:'Tinh linh',wisp:'Dải đuôi',pelvis:'Hông',torso:'Thân trên',armN:'Bắp tay gần',foreN:'Cẳng tay gần',armF:'Bắp tay xa',foreF:'Cẳng tay xa',thighN:'Đùi gần',shinN:'Cẳng chân gần',thighF:'Đùi xa',shinF:'Cẳng chân xa',wpnU:'Vũ khí sau tay',wpnO:'Vũ khí trước tay'};
 const label=b=>b.name||names[b.id]||b.id;
 const state={project:null,pose:null,bone:null,key:0,time:0,playing:false,images:new Map(),undo:[],redo:[],bounds:null,mode:'animation',loading:false};
-const cache=new Map();let source,catalog,adoption=0,drag=null,anchorRect=null,copySource=null,wingPreview=null;
+const cache=new Map();let source,catalog,adoption=0,drag=null,anchorRect=null,copySource=null,wingPreview=null,wingImporter=null;
 const ctx=$('stage').getContext('2d'),anchorCtx=$('anchor').getContext('2d');
 document.querySelector('.viewbar').insertAdjacentHTML('beforeend','<label class="drag-mode">Kéo<select id="dragMode" aria-label="Chế độ kéo pet"><option value="rotate">Tạo pose · giữ khớp nối</option><option value="translate">Dịch / tách bộ phận</option></select></label>');
 document.querySelector('.viewbar').insertAdjacentHTML('afterbegin','<label class="editor-mode">Chế độ<select id="editorMode"><option value="animation">▶ Animation · chỉ sửa frame</option><option value="rig">◇ Dựng rig · khung gốc</option></select></label><label class="rig-tools" hidden>Công cụ<select id="rigTool"><option value="move">Dịch bộ phận / khớp</option><option value="joint">Đặt khớp trên ảnh · giữ ảnh</option><option value="add">Thêm xương tại chỗ chạm</option><option value="link">Nối xương đang chọn → cha</option></select></label>');
@@ -38,6 +39,7 @@ function persist(){stash();try{localStorage.setItem(draftKey,JSON.stringify(stat
 async function image(src){const url=source.assetURL(src);if(!cache.has(url))cache.set(url,new Promise((ok,no)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>ok(img);img.onerror=()=>{cache.delete(url);no(Error('Không tải được ảnh '+src.slice(0,100)))};img.src=url}));return cache.get(url)}
 function busy(value){state.loading=value;document.querySelector('main').setAttribute('aria-busy',String(value));for(const n of document.querySelectorAll('main button,main input,main select,#desktopSave'))n.disabled=value;if(!value)updateModeControls()}
 async function adopt(p){
+ if(wingMode)p=prepareWingProject(p);
  validatePet(p);const version=++adoption,next=clone(p),images=new Map();
  busy(true);message('Đang tải '+next.name+'…');
  try{
@@ -84,6 +86,7 @@ function renderBone(){
  const s=p.sprites[b.sprite];$('width').value=s?.w||'';$('height').value=s?.h||'';$('width').disabled=$('height').disabled=!s;
  $('pivotX').value=b.pivot[0];$('pivotY').value=b.pivot[1];$('atX').value=b.at[0];$('atY').value=b.at[1];$('boneScale').value=b.scale;$('visible').checked=b.visible!==false;
  $('boneRotation').value=Number(((b.rotation||0)*180/Math.PI).toFixed(3));$('boneIdentity').textContent='ID: '+b.id+' · '+(b.sprite?'Ảnh: '+b.sprite:'Xương trống');
+ if(wingMode){const v=p.wingView;$('wingViewMode').value=v.mode;$('wingYaw').value=v.yaw;$('wingFarScale').value=v.farScale;$('wingSweep').value=Number((v.sweep*180/Math.PI).toFixed(2));$('wingSide').value=b.wingSide||'';$('wingSource').value=b.wingSource||(b.wingSide==='far'?'right':'left');wingImporter?.refresh()}
  for(const button of $('boneList').children)button.classList.toggle('selected',button.dataset.bone===b.id);
  renderPose();updateModeControls();
 }
@@ -135,8 +138,11 @@ for(const [id,delta]of [['layerBack',-1],['layerFront',1]])on(id,'click',()=>mut
 on('addBone','click',()=>openRigDialog({kind:'add',parent:state.bone}));
 on('upload','click',()=>$('imageFile').click());on('imageFile','change',async()=>{
  const file=$('imageFile').files[0];if(!file)return;try{
-  if(!['image/png','image/webp'].includes(file.type)||file.size>8*1024*1024)throw Error('Ảnh PNG/WebP tối đa 8 MB');
-  const src=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(file)}),img=await image(src),id='custom_'+Date.now().toString(36),old=state.project.sprites[selected().sprite];
+  if(!(wingMode?['image/png','image/webp','image/jpeg']:['image/png','image/webp']).includes(file.type)||file.size>8*1024*1024)throw Error('Ảnh PNG/WebP'+(wingMode?'/JPG':'')+' tối đa 8 MB');
+  let src=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(file)});const img=await image(src);
+  if(wingMode&&await wingImporter.upload(img))return;
+  if(file.type==='image/jpeg'){const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);src=c.toDataURL('image/png')}
+  const id='custom_'+Date.now().toString(36),old=state.project.sprites[selected().sprite];
   const s={src,w:old?.w||Math.min(80,img.naturalWidth),h:old?.h||Math.min(80,img.naturalWidth)*img.naturalHeight/img.naturalWidth};
   const p=clone(state.project);p.sprites[id]=s;p.spriteOrder.push(id);p.bones.find(b=>b.id===state.bone).sprite=id;checkpoint();await adopt(p);message('Đã gắn ảnh riêng. Chỉnh điểm neo để khớp với bộ phận cha.')
  }finally{$('imageFile').value=''}
@@ -155,7 +161,7 @@ on('applyCopy','click',()=>{if(state.project.clip!==copySource.clip)throw Error(
 for(const [id,from,to]of [['undo','undo','redo'],['redo','redo','undo']])on(id,'click',async()=>{if(!state[from].length)return;state[to].push(JSON.stringify(state.project));await adopt(JSON.parse(state[from].pop()))});
 for(const [id,key]of [['petName','name'],['petId','id']])on(id,'change',()=>mutate(p=>p[key]=$(id).value.trim()));
 on('anchor','pointerdown',e=>{e.preventDefault();if(!anchorRect)return;const r=$('anchor').getBoundingClientRect(),x=(e.clientX-r.left)*280/r.width,y=(e.clientY-r.top)*220/r.height;commitRig(setPetPivot(state.project,state.bone,[Math.max(0,Math.min(1,(x-anchorRect.x)/anchorRect.w)),Math.max(0,Math.min(1,(y-anchorRect.y)/anchorRect.h))]))});
-function pickRigBone(xy,base){const p=state.project,handles=petHandles(p,{},base).filter(h=>h.kind==='joint'),hit=pickPetHandle(handles,xy,state.bone);if(hit)return hit.id;const M=boneMatrices(p,{},base);for(const b of [...p.bones].reverse()){const s=p.sprites[b.sprite];if(!s||b.visible===false)continue;const local=inversePoint(M[b.id],...xy);if(local[0]>=-b.pivot[0]*s.w&&local[0]<=(1-b.pivot[0])*s.w&&local[1]>=-b.pivot[1]*s.h&&local[1]<=(1-b.pivot[1])*s.h)return b.id}return null}
+function pickRigBone(xy,base){const p=state.project,handles=petHandles(p,{},base).filter(h=>h.kind==='joint'),hit=pickPetHandle(handles,xy,state.bone);if(hit)return hit.id;const M=boneMatrices(p,{},base);for(const b of [...p.bones].reverse()){const s=p.sprites[b.sprite];if(!s||b.visible===false)continue;for(const plane of spritePlanes(p,b,s,b.pivot)){const local=inversePoint(multiply(M[b.id],plane.matrix),...xy),[x,y,w,h]=plane.rect;if(local[0]>=x&&local[0]<=x+w&&local[1]>=y&&local[1]<=y+h)return b.id}}return null}
 function dragRig(xy){const world=inversePoint(drag.base,...xy);const next=drag.tool==='joint'?setPetPivot(drag.project,drag.id,pivotAtWorld(drag.project,drag.id,world)):movePetBone(drag.project,drag.id,[drag.origin[0]+world[0]-drag.start[0],drag.origin[1]+world[1]-drag.start[1]]);state.project=next;renderBone();message('Đang sửa khung gốc · không thay frame animation')}
 on('stage','pointerdown',e=>{
  e.preventDefault();if(!state.project||state.loading)return;
@@ -212,6 +218,14 @@ busy(true);safe(async()=>{
  if(wingMode&&parent!==window){busy(true);message('Đang nạp nhân vật preview…');parent.postMessage({type:'nightcamp.wing.ready'},location.origin)}
 })();
 if(wingMode){
+ document.querySelector('[data-panel=rig] h2').insertAdjacentHTML('afterend','<section id="wingViewSettings"><h3>Góc cánh theo nhân vật</h3><label>Góc nhìn<select id="wingViewMode"><option value="three-quarter">3/4 · cánh quét về sau lưng</option><option value="front">Chính diện · khung ảnh gốc</option></select></label><div class="pair"><label>Góc xoay 3/4 (độ)<input id="wingYaw" type="number" min="10" max="80" step="1"></label><label>Cỡ cánh xa<input id="wingFarScale" type="number" min="0.25" max="1" step="0.05"></label></div><label>Độ quét lên (độ)<input id="wingSweep" type="number" min="-34" max="34" step="1"></label><p class="hint">Góc 3/4 thu ngắn cánh xa và quét cả đôi về phía sau; tự lật theo nhân vật. Khung xương và keyframe gốc không bị ghi đè.</p></section>');
+ $('bone').closest('label').insertAdjacentHTML('afterend','<label>Vai trò xương cánh<select id="wingSide"><option value="">Theo xương cha</option><option value="center">Gốc giữa / không chiếu phối cảnh</option><option value="near">Cánh gần</option><option value="far">Cánh xa · vẽ sau cánh gần</option><option value="pair">Ảnh nguyên đôi cánh chính diện</option></select></label><label>Ảnh một cánh có ngọn hướng<select id="wingSource"><option value="left">Sang trái ←</option><option value="right">Sang phải →</option></select></label>');
+ for(const id of ['wingViewMode','wingYaw','wingFarScale','wingSweep','wingSide','wingSource','wingAutoSlice','sliceCurrentWing','wingResources'])rigOnly.add(id);
+ for(const [id,key]of [['wingViewMode','mode'],['wingYaw','yaw'],['wingFarScale','farScale'],['wingSweep','sweep']])on(id,'change',()=>mutate(p=>{p.wingView[key]=key==='mode'?$(id).value:$(id).valueAsNumber*(key==='sweep'?Math.PI/180:1)}));
+ on('wingSide','change',()=>mutate(p=>{const b=p.bones.find(b=>b.id===state.bone);if($('wingSide').value)b.wingSide=$('wingSide').value;else delete b.wingSide}));
+ on('wingSource','change',()=>mutate(p=>p.bones.find(b=>b.id===state.bone).wingSource=$('wingSource').value));
+ wingImporter=mountWingImporter({project:()=>state.project,bone:()=>state.bone,mode:()=>state.mode,image,message,adopt:async p=>{checkpoint();await adopt(p)}});
+ $('imageFile').accept='image/png,image/webp,image/jpeg';
  document.title='Wing Cutout Studio · thiết kế và rig cánh';document.body.dataset.studioKind='wings';
  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(walker.nextNode()){const n=walker.currentNode;if(!['SCRIPT','STYLE'].includes(n.parentElement?.tagName))n.textContent=terminology(n.textContent)}
  document.querySelector('header strong').textContent='WING CUTOUT STUDIO';$('blankPet').textContent='＋ Tạo cánh trống';$('desktopSave').textContent='Lưu cánh';$('pet').closest('label').firstChild.textContent='Khung cánh / ảnh có sẵn';$('keepClip').textContent='Lưu clip vào bộ animation của cánh';

@@ -12,9 +12,10 @@ vỗ/mở–gập. Công cụ này dựng chuyển động cutout; không sao ch
    trong mục Chọn cánh & chuyển động: gồm gốc chung, hai gốc cánh và hai
    ngọn cánh. Khung này có mẫu góc vỗ, chưa có ảnh.
 2. Chuyển **Chế độ → Dựng rig**. Vào **Khớp & ảnh bộ phận**, chọn xương,
-   tải PNG/WebP riêng hoặc chọn ảnh đã có trong project. Ảnh phải tách sẵn
-   từng mảnh để mỗi mảnh xoay độc lập; một ảnh nguyên đôi cánh không tự
-   biến thành nhiều mảnh hoặc mesh.
+   tải PNG/WebP/JPG. Bật **Tự tách các mảnh rời** để phân tích ảnh nhiều mảnh;
+   dùng **Tách ảnh đang gán** nếu đã lỡ gán nguyên tấm. Tách nền từ mép ảnh,
+   giữ chi tiết trắng bên trong, có lọc bụi/gộp vùng như editor nhân vật.
+   Không tự chia một hình cánh đang dính liền thành lông vũ hoặc mesh.
 3. Đặt điểm xoay trên ảnh, nối cha–con, thêm/xóa/đổi tên xương và chỉnh lớp.
    Công cụ **Đặt khớp trên ảnh · giữ ảnh** giữ nguyên vị trí hình khi đặt neo.
    Gốc chung ở (0,0) là điểm gắn lên lưng; đặt các nhánh tương đối với gốc này.
@@ -31,6 +32,42 @@ chỉnh **Lệch X/Y**, **Tỷ lệ**, **Góc**. Không dùng Rộng/Cao hay đi
 một ảnh để chỉnh cả rig. Nút **Thiết kế xương & animation cánh** mở lại đúng rig
 đang đeo; bấm gắn lần nữa cập nhật món đó, không tạo thêm bản trùng.
 Preview trong editor dùng đúng điểm gắn và độ lệch của món đang đeo.
+
+## Ảnh gồm nhiều bộ phận hoặc nhiều tư thế
+
+- **Nhiều đoạn cánh riêng để rig:** trong hộp tách, chọn mảnh, đặt tên rồi gán
+  vào xương có sẵn hoặc **＋ Xương cánh gần/xa mới**. Dùng **Gán hàng loạt**
+  để chọn một vai trò cho nhiều ảnh; có thể đổi từng hàng. Chọn bỏ hiển thị
+  ảnh nguyên tấm nếu nó đang nằm trên xương gốc. Nút **Lưu & gán** tạo/gán
+  một lần; **Lưu các mảnh** chỉ đưa vào thư viện, không đổi rig hay animation.
+- **Bốn hình là bốn tư thế của cùng cánh, như ảnh tham chiếu:** chọn các hình
+  rồi bấm **Ảnh đã chọn → các frame cùng một cánh**, chỉnh bước frame,
+  bấm **Lưu & gán**. Tạo clip lặp với mỗi hình ở một frame giữ ảnh; không vẽ
+  cả bốn cánh cùng lúc. Clip cũ vẫn giữ trong bộ animation.
+- **Tài nguyên cánh đã cắt:** giữ tên và xương đã chọn, hỗ trợ chọn nhiều mảnh
+  để gán lại. Lưu ảnh trong `sprites`, không nhân đôi một bản `resources` nữa.
+- Chọn **Ngọn cánh trong ảnh gốc hướng trái/phải** khi nhập, không phải hướng
+  quay của nhân vật. Ảnh tham chiếu có ngọn sang trái, gốc gắn lưng ở bên phải.
+  Neo `.94/.75` (hoặc `.06/.75` cho ảnh ngọn phải) chỉ là gợi ý ban đầu;
+  kiểm tra và chỉnh trên ảnh cho đúng thiết kế của bạn.
+
+## Góc nhìn 3/4 thay vì xòe ngang chính diện
+
+Project cánh mới và project cũ mở trong editor mặc định dùng **3/4 · cánh
+quét về sau lưng**. Khung/keyframe gốc được giữ nguyên; không tự xoay lại
+góc của tất cả frame. Có thể chọn **Chính diện** để quay về khung ảnh gốc.
+
+Trong **Góc cánh theo nhân vật**, chỉnh góc xoay, cỡ cánh xa và độ quét lên.
+Đặt **Vai trò xương cánh** ở đầu mỗi nhánh: gần, xa, gốc giữa hoặc ảnh nguyên
+đôi cánh chính diện. Xương con để **Theo xương cha** để không chiếu phối cảnh
+hai lần. Cánh xa được vẽ trước cánh gần, cả hai vẫn sau nhân vật và lật theo
+hướng nhân vật. Với ảnh nguyên đôi, bộ phát chiếu riêng hai nửa quanh neo,
+không giữ một tấm đối xứng hướng thẳng vào người xem.
+
+Đây là phép chiếu cutout 2D, không dựng thêm mặt khuất hay tái vẽ vật thể 3D.
+Ảnh cánh được vẽ sẵn theo góc 3/4 vẫn cho kết quả tự nhiên nhất. Thông số
+`wingView`, `wingSide`, `wingSource` đi cùng project, bundle, web preview và
+bộ phát demo; game khác cần dùng bộ phát mới để đọc đúng phối cảnh.
 
 ## Mẫu Falcon có sẵn
 

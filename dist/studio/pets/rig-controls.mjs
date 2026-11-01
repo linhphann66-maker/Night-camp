@@ -1,9 +1,11 @@
-import {boneMatrices,activeSprite,spritePivot,point,inversePoint} from './runtime.mjs';
+import {boneMatrices,boneParentMatrix,wingProjection,activeSprite,spritePivot,point,inversePoint} from './runtime.mjs';
 const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const clone=p=>structuredClone(p);
 // Move the free end of the image; its attachment pivot stays pinned.
 export function boneTip(p,pose,b){
  const s=p.sprites[activeSprite(p,pose,b)],pivot=spritePivot(p,pose,b);if(!s)return [0,-12];
+ if(b.wingSide==='pair'&&p.wingView?.mode==='three-quarter')return point(wingProjection(p,{wingSide:'near',wingSource:'left'}),(.08-pivot[0])*s.w,(.08-pivot[1])*s.h);
+ if(p.wingView&&(b.wingSource||['near','far'].includes(b.wingSide)))return [((b.wingSource||(b.wingSide==='far'?'right':'left'))==='left'?.08-pivot[0]:.92-pivot[0])*s.w,(.12-pivot[1])*s.h];
  let uv;
  if(/^leg|^shin|^thigh|^arm|^fore/.test(b.id))uv=[.5,.94];
  else if(b.id==='head')uv=[.12,.58];
@@ -24,7 +26,7 @@ export function pickPetHandle(handles,xy,selected,radius=22){
 function limbParent(p,id){const b=p.bones.find(b=>b.id===id),match=/^(fore|shin)(N|F)$/.exec(id);if(!match)return null;const parent=(match[1]==='fore'?'arm':'thigh')+match[2];return b.parent===parent?parent:null}
 export function beginPetDrag(p,pose,handle,xy,base,mode='rotate'){
  const b=p.bones.find(b=>b.id===handle.id);if(!b)throw Error('Không tìm thấy xương');
- const M=boneMatrices(p,pose,base),parent=b.parent?M[b.parent]:base,start=inversePoint(parent,...xy),center=[b.at[0]+(pose[b.id+':dx']||0),b.at[1]+(pose[b.id+':dy']||0)];
+ const M=boneMatrices(p,pose,base),parent=boneParentMatrix(p,b,M,base),start=inversePoint(parent,...xy),center=[b.at[0]+(pose[b.id+':dx']||0),b.at[1]+(pose[b.id+':dy']||0)];
  const tipLocal=inversePoint(parent,...point(M[b.id],...boneTip(p,pose,b)));
  let ref=[start[0]-center[0],start[1]-center[1]];
  const virtual=handle.kind==='joint'||Math.hypot(xy[0]-M[b.id][4],xy[1]-M[b.id][5])<8;

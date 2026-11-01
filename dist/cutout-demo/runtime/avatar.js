@@ -755,10 +755,12 @@ function validatePet(p){
  if(typeof p.id!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(p.id)||reserved.has(p.id)||typeof p.name!=='string'||!p.name.trim())fail('Tên / ID pet không hợp lệ');
  if(p.activeClipId!==undefined&&(typeof p.activeClipId!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(p.activeClipId)||reserved.has(p.activeClipId)))fail('ID clip không hợp lệ');
  if(!Number.isFinite(p.scale)||p.scale<=0||p.scale>10||!Array.isArray(p.bones)||!p.bones.length||p.bones.length>100)fail('Rig pet không hợp lệ');
+ if(p.wingView){const v=p.wingView;if(!['front','three-quarter'].includes(v.mode)||!Number.isFinite(v.yaw)||v.yaw<10||v.yaw>80||!Number.isFinite(v.farScale)||v.farScale<.25||v.farScale>1||!Number.isFinite(v.sweep)||Math.abs(v.sweep)>.6)fail('Góc nhìn cánh không hợp lệ')}
  if(!p.sprites||!Array.isArray(p.spriteOrder)||p.spriteOrder.length>300||new Set(p.spriteOrder).size!==p.spriteOrder.length)fail('Danh mục ảnh không hợp lệ');
  for(const id of p.spriteOrder){const s=p.sprites[id];if(typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(id)||reserved.has(id)||!s||![s.w,s.h].every(v=>Number.isFinite(v)&&v>0&&v<=2000)||typeof s.src!=='string'||!(/^assets\/[\w./-]+\.(png|webp)$/.test(s.src)&&!s.src.split('/').includes('..')||/^data:image\/(png|webp);base64,[A-Za-z0-9+/=]+$/.test(s.src)))fail('Ảnh pet không hợp lệ: '+id)}
  const ids=new Set(p.bones.map(b=>b.id));if(ids.size!==p.bones.length)fail('Trùng ID xương');
  for(const b of p.bones){
+  if(b.wingSide!==undefined&&!['center','near','far','pair'].includes(b.wingSide)||b.wingSource!==undefined&&!['left','right'].includes(b.wingSource))fail('Bên cánh / hướng ảnh không hợp lệ');
   if(b.name!==undefined&&(typeof b.name!=='string'||!b.name.trim()||b.name.length>100)||b.rotation!==undefined&&(!Number.isFinite(b.rotation)||Math.abs(b.rotation)>Math.PI*20))fail('Tên / góc gốc của xương không hợp lệ');
   if(typeof b.id!=='string'||!/^[a-zA-Z0-9_-]{1,60}$/.test(b.id)||reserved.has(b.id)||b.parent!==null&&!ids.has(b.parent)||b.sprite!==null&&!p.spriteOrder.includes(b.sprite))fail('Liên kết xương / ảnh không hợp lệ');
   if(![b.at,b.pivot].every(a=>Array.isArray(a)&&a.length===2&&a.every(v=>Number.isFinite(v)&&Math.abs(v)<=2000))||b.pivot.some(v=>v<0||v>1)||!Number.isFinite(b.scale)||b.scale<=0||b.scale>10)fail('Điểm neo / tỷ lệ không hợp lệ');
@@ -779,17 +781,29 @@ function samplePet(clip,time){
 const multiply=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
 const point=(m,x,y)=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];
 function inversePoint(m,x,y){const d=m[0]*m[3]-m[1]*m[2];if(Math.abs(d)<1e-8)throw Error('Xương đang có tỷ lệ 0; tăng tỷ lệ trước khi kéo');return [(m[3]*(x-m[4])-m[2]*(y-m[5]))/d,(-m[1]*(x-m[4])+m[0]*(y-m[5]))/d]}
+function wingProjection(p,b){
+ const v=p.wingView;if(v?.mode!=='three-quarter'||!['near','far'].includes(b.wingSide))return [1,0,0,1,0,0];
+ const far=b.wingSide==='far',sign=(b.wingSource||(far?'right':'left'))==='right'?-1:1,yaw=v.yaw*Math.PI/180;
+ return [(far?Math.cos(yaw)*v.farScale:Math.sin(yaw))*sign,v.sweep*(far?1.5:1)*sign,0,far?v.farScale:1,far?-8:-2,far?-4:0];
+}
+function boneParentMatrix(p,b,M,base=[1,0,0,1,0,0]){return multiply(b.parent?M[b.parent]:base,wingProjection(p,b))}
 function boneMatrices(p,pose,base=[1,0,0,1,0,0]){
  const result=Object.create(null),byId=Object.fromEntries(p.bones.map(b=>[b.id,b]));
- const get=id=>{if(result[id])return result[id];const b=byId[id],a=(b.rotation||0)+(pose[id+':rot']||0),c=Math.cos(a),s=Math.sin(a),sx=(pose[id+':sx']??1)*b.scale,sy=(pose[id+':sy']??1)*b.scale;return result[id]=multiply(b.parent?get(b.parent):base,[c*sx,s*sx,-s*sy,c*sy,b.at[0]+(pose[id+':dx']||0),b.at[1]+(pose[id+':dy']||0)])};
+ const get=id=>{if(result[id])return result[id];const b=byId[id],a=(b.rotation||0)+(pose[id+':rot']||0),c=Math.cos(a),s=Math.sin(a),sx=(pose[id+':sx']??1)*b.scale,sy=(pose[id+':sy']??1)*b.scale;if(b.parent)get(b.parent);return result[id]=multiply(boneParentMatrix(p,b,result,base),[c*sx,s*sx,-s*sy,c*sy,b.at[0]+(pose[id+':dx']||0),b.at[1]+(pose[id+':dy']||0)])};
  for(const b of p.bones)get(b.id);return result;
 }
 function activeSprite(p,pose,b){const index=pose[b.id+':img']??-1;return index>=0?p.spriteOrder[index]:b.sprite}
 function spritePivot(p,pose,b){const id=activeSprite(p,pose,b);return id!==b.sprite&&b.variantPivots?.[id]||b.pivot}
-function poseBounds(p,pose){const M=boneMatrices(p,pose),xs=[],ys=[];for(const b of p.bones){const s=p.sprites[activeSprite(p,pose,b)],pivot=spritePivot(p,pose,b);if(!s||b.visible===false||pose[b.id+':hide'])continue;for(const x of [-pivot[0]*s.w,(1-pivot[0])*s.w])for(const y of [-pivot[1]*s.h,(1-pivot[1])*s.h]){const at=point(M[b.id],x,y);xs.push(at[0]);ys.push(at[1])}}return xs.length?{x0:Math.min(...xs),y0:Math.min(...ys),x1:Math.max(...xs),y1:Math.max(...ys)}:{x0:-30,y0:-60,x1:30,y1:0}}
+function spritePlanes(p,b,s,pivot){
+ const x=-pivot[0]*s.w,y=-pivot[1]*s.h;
+ return p.wingView?.mode==='three-quarter'&&b.wingSide==='pair'?
+ [{matrix:wingProjection(p,{wingSide:'far',wingSource:'right'}),rect:[0,y,s.w*(1-pivot[0]),s.h]}, {matrix:wingProjection(p,{wingSide:'near',wingSource:'left'}),rect:[x,y,s.w*pivot[0],s.h]}]:[{matrix:[1,0,0,1,0,0],rect:[x,y,s.w,s.h]}];
+}
+function poseBounds(p,pose){const M=boneMatrices(p,pose),xs=[],ys=[];for(const b of p.bones){const s=p.sprites[activeSprite(p,pose,b)],pivot=spritePivot(p,pose,b);if(!s||b.visible===false||pose[b.id+':hide'])continue;for(const plane of spritePlanes(p,b,s,pivot)){const m=multiply(M[b.id],plane.matrix),[x,y,w,h]=plane.rect;for(const px of [x,x+w])for(const py of [y,y+h]){const at=point(m,px,py);xs.push(at[0]);ys.push(at[1])}}}return xs.length?{x0:Math.min(...xs),y0:Math.min(...ys),x1:Math.max(...xs),y1:Math.max(...ys)}:{x0:-30,y0:-60,x1:30,y1:0}}
+function drawingOrder(p){if(p.wingView?.mode!=='three-quarter')return p.bones;const byId=Object.fromEntries(p.bones.map(b=>[b.id,b])),rank=b=>b.wingSide==='far'?0:b.wingSide==='near'?2:b.wingSide?1:b.parent?rank(byId[b.parent]):1;return [...p.bones].sort((a,b)=>rank(a)-rank(b))}
 function drawPet(ctx,p,pose,images,base=[1,0,0,1,0,0],{bones=false,selected=null}={}){
  const M=boneMatrices(p,pose,base);
- for(const b of p.bones){const id=activeSprite(p,pose,b),s=p.sprites[id],pivot=spritePivot(p,pose,b),img=images instanceof Map?images.get(id):images[id];if(!s||!img||b.visible===false||pose[b.id+':hide'])continue;ctx.save();ctx.transform(...M[b.id]);if(b.dark)ctx.globalAlpha*=.76;ctx.drawImage(img,-pivot[0]*s.w,-pivot[1]*s.h,s.w,s.h);ctx.restore()}
+ for(const b of drawingOrder(p)){const id=activeSprite(p,pose,b),s=p.sprites[id],pivot=spritePivot(p,pose,b),img=images instanceof Map?images.get(id):images[id];if(!s||!img||b.visible===false||pose[b.id+':hide'])continue;for(const plane of spritePlanes(p,b,s,pivot)){ctx.save();ctx.transform(...multiply(M[b.id],plane.matrix));if(b.dark)ctx.globalAlpha*=.76;if(b.wingSide==='pair'&&p.wingView?.mode==='three-quarter'){ctx.beginPath();ctx.rect(...plane.rect);ctx.clip()}ctx.drawImage(img,-pivot[0]*s.w,-pivot[1]*s.h,s.w,s.h);ctx.restore()}}
  if(bones){ctx.save();ctx.lineWidth=1.5;for(const b of p.bones){const m=M[b.id];ctx.strokeStyle='#d3ed9299';if(b.parent){ctx.beginPath();ctx.moveTo(M[b.parent][4],M[b.parent][5]);ctx.lineTo(m[4],m[5]);ctx.stroke()}ctx.fillStyle=b.id===selected?'#ffbd80':'#d3ed92';ctx.beginPath();ctx.arc(m[4],m[5],b.id===selected?6:3.5,0,Math.PI*2);ctx.fill()}ctx.restore()}return M;
 }
 

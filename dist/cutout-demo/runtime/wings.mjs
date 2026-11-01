@@ -3,6 +3,17 @@
 import {validatePet} from './pets/runtime.mjs';
 import {createBlankPet} from './pets/rig-authoring.mjs';
 export const EMPTY_IMAGE='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
+export const DEFAULT_WING_VIEW={mode:'three-quarter',yaw:55,farScale:.72,sweep:.15};
+export function prepareWingProject(project){
+ const p=structuredClone(project);p.wingView||={...DEFAULT_WING_VIEW};
+ for(const b of p.bones)if(b.wingSide===undefined){
+  if(b.id==='wing'&&p.id==='falcon_wings')b.wingSide='pair';
+  else if(b.id==='wingLeft'){b.wingSide='near';b.wingSource='left'}
+  else if(b.id==='wingRight'){b.wingSide='far';b.wingSource='right'}
+  else if(b.sprite&&!p.bones.find(n=>n.id===b.parent)?.wingSide)b.wingSide='near';
+ }
+ return validatePet(p);
+}
 export function createWingCatalog(catalog){
  const blank=createBlankPet('custom_wings','Cánh mới');
  const pair=createBlankPet('paired_wings','Khung cánh hai bên · gán ảnh riêng');
@@ -20,7 +31,7 @@ export function createWingCatalog(catalog){
   const clip=(name,keys,dur=1.5,kind='loop')=>({name,kind,dur,hit:0,keys:keys.map(([t,img,rot=0])=>({t,curve:'inout',P:{'wing:img':img,'wing:rot':rot}}))});
   p.clips={idle:clip('Gập → mở → gập',[[0,0],[.25,1],[.5,2],[.9,2],[1.15,1],[1.5,0]]),open:clip('Mở · dao động cutout',[[0,2,-.07],[.5,2,.07],[1,2,-.07]],1),fold:clip('Gập',[[0,0]],1,'pose')};p.clip=structuredClone(p.clips.idle);rigs.falcon_wings=p;
  }
- for(const p of Object.values(rigs))validatePet(p);return {rigs};
+ for(const [id,p]of Object.entries(rigs))rigs[id]=prepareWingProject(p);return {rigs};
 }
 export function makeWingAttachment(project,previous){
  validatePet(project);

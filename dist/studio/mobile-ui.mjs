@@ -31,6 +31,7 @@ export function mountMobileNavigation(){
   {id:'preview',label:'Preview asset',icon:'◉'},
   {id:'pets',label:'Thú cưng cutout',icon:'♧',action:()=>document.getElementById('petStudioButton').click()},
   {id:'wings',label:'Cánh & rig',icon:'✧',action:()=>document.getElementById('wingStudioButton').click()},
+  {id:'maps',label:'Vẽ & tạo map',icon:'▦',action:()=>document.getElementById('mapStudioButton').click()},
   {id:'character',label:'Nhân vật & ảnh bộ phận',icon:'✦',panel:character},
   {id:'anchors',label:'Điểm neo & xương',icon:'◇',panel:anchors},
   {id:'accessories',label:'Phụ kiện & vũ khí',icon:'♧',panel:accessories},

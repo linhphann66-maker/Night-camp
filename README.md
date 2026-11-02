@@ -7,6 +7,10 @@ cùng một địa chỉ. Trạng thái chiến đấu, vật phẩm và tiến 
 Repo GitHub hiện tại: <https://github.com/linhphann66-maker/Night-camp>.
 Deployment Railway/VPS có thể dùng trực tiếp nhánh `main`.
 
+Studio có **Vẽ & tạo map**: tô nền thủ tục theo bảng màu gốc, dùng lại 377 ảnh
+môi trường (cây/đá/cầu/cỏ), tải ảnh riêng, chỉnh vùng cản/mặt cầu, chạy thử và
+xuất bundle/web preview offline. Xem [Map Studio](dist/studio/maps/README.md).
+
 Studio hiện có **Cánh & rig**: dựng khung cánh riêng, gán ảnh, tạo animation,
 tự tách ảnh bộ phận/ảnh động, phối cảnh cánh gần–xa 3/4 sau lưng và xuất
 sang demo. Xem [hướng dẫn cánh](dist/studio/WINGS.md).

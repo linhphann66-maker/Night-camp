@@ -72,6 +72,51 @@ Việc có file không đồng nghĩa có giấy phép phát hành: kiểm tra q
 Góc nhìn: dùng Bàn tay kéo, nút +/- hoặc bánh xe chuột; Vừa map để nhìn toàn
 bộ. Mobile có menu riêng cho từng mục, mặc định chỉ preview/vẽ map.
 
+## Đường cong tự do
+
+Vào **☰ → Đường cong**, chọn chất liệu **Đất / Cát / Đá lát**, độ rộng,
+mềm mép và độ uốn, rồi bấm **Vẽ đường mới**. Trên desktop mục này ở cột trái.
+
+1. Chạm từng điểm trên map, không phải kéo cọ theo ô. Đường uốn qua các điểm.
+   Hai điểm tạo đường thẳng; ba điểm trở lên tạo tuyến cong. Các đầu bo tròn.
+2. Thanh nổi có **Bỏ điểm cuối**, **Hoàn tất**, **Hủy**. Chưa Hoàn tất thì
+   đường chỉ là bản nháp vẽ, chưa vào project. Lưu/xuất/chạy thử yêu cầu hoàn
+   tất hoặc hủy trước, tránh vô tình xuất thiếu đường.
+3. Sau khi hoàn tất, kéo các chấm được đánh số để sửa đường. Mỗi lần kéo là
+   một bước Hoàn tác; thả tay rồi bấm Hoàn tác/Làm lại. Kéo giữ độ lệch lúc
+   chạm để không làm điểm nhảy vào giữa ngón tay.
+4. Trong mục Đường cong có danh sách đường và điểm, tọa độ X/Y, chèn/xóa
+   điểm, nhân bản/xóa đường. **Chèn điểm** rồi chạm gần đoạn muốn thêm điểm.
+   Đường cần ít nhất hai điểm; muốn bỏ cả đường dùng **Xóa đường**.
+5. Rộng 8–512 đơn vị thế giới, không phụ thuộc zoom. Mềm mép 0–90%; độ uốn
+   0–100%, mức 0 là các đoạn thẳng gấp khúc, vẫn bo góc. Đường được cắt ở
+   biên map, nằm trên nền và dưới mọi vật thể, nhận ánh sáng ngày/đêm.
+
+Đường là lớp ảnh nền riêng, **không thay đổi terrain, nước hay va chạm**.
+Muốn đi qua nước phải thêm cầu hoặc vùng đường đi nước như trước. Các đường
+vẽ sau đè lên đường vẽ trước. Giới hạn 128 đường, 256 điểm/đường, tổng 4096
+điểm/map. Thu nhỏ map mà làm điểm đường ra ngoài biên sẽ bị từ chối; editor
+không âm thầm xóa điểm. Độ uốn lớn ở góc gấp có thể làm đường vòng ra ngoài
+đa giác các điểm; kéo các điểm xa nhau hơn hoặc giảm độ uốn nếu không muốn.
+
+Project/bundle vẫn dùng `darkin-map-v1` / `darkin-map-bundle-v1`, không đổi tên.
+Map cũ thiếu `roads` vẫn đọc được. Ví dụ dữ liệu mới:
+
+```json
+"roads": [{
+  "id": "road_1", "material": "dirt", "width": 120,
+  "softness": 0.25, "smoothness": 0.8,
+  "points": [{"x": 200, "y": 200}, {"x": 450, "y": 500}, {"x": 800, "y": 220}]
+}]
+```
+
+**Game mới phải thay `map-runtime.mjs` bằng bản tải mới từ Studio**. Bộ phát
+version 2 xuất `MAP_RUNTIME_VERSION = 2` và vẫn dùng `DarkinMapPlayer` như cũ.
+Chỉ chép file JSON sang game đang giữ bộ phát cũ thì không hiển thị đường cong.
+Bundle ghi `runtime.version: 2`, có source tương ứng; file HTML offline đã nhúng
+đúng bản bộ phát mới, không cần chép thêm mã. Không thực thi source tùy ý từ
+JSON; game nên import MJS do bạn kiểm soát.
+
 ## Các cách xuất
 
 - `.map-project.json`: `format: darkin-map-v1`, map và ảnh nhúng để mở lại.

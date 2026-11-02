@@ -80,6 +80,14 @@ export function terrainRGB(type,x,y,seed,n=0){
   const v=(noise(x/64,y/64,seed+9)-.5)*(type==='grass'?20:12);day=day.map((c,i)=>c+v*(i===2?1:1.3));night=night.map((c,i)=>c+v*(i===2?.8:1));
  }return mix(day,night,n).map(v=>Math.max(0,Math.min(255,Math.round(v))));
 }
+// Road paint uses a repeating 300×210 pattern. Raw world noise is NOT tileable:
+// sampling it directly causes a visible brightness jump at each repeat. Blend
+// translated copies with smooth weights so opposite edges and their slopes
+// agree. Stone's deliberate 150×105 joints still align at the repeat boundary.
+export function roadTextureRGB(type,x,y,seed,n=0){
+ const w=300,h=210,px=((x%w)+w)%w,py=((y%h)+h)%h,smooth=t=>t*t*(3-2*t),u=smooth(px/w),v=smooth(py/h);
+ return mix(mix(terrainRGB(type,px,py,seed,n),terrainRGB(type,px-w,py,seed,n),u),mix(terrainRGB(type,px,py-h,seed,n),terrainRGB(type,px-w,py-h,seed,n),u),v).map(Math.round);
+}
 // The same blend on both sides of a boundary. Visual only: no change to water,
 // collision or bridge semantics. Separate custom image tiles are never recolored.
 export function groundRGB(p,type,x,y,n=nightness(p)){
@@ -91,7 +99,7 @@ export function groundRGB(p,type,x,y,n=nightness(p)){
 export function ambientRGB(p){const l=lightingSettings(p),n=nightness(p),warm=l.hour>12?[255,164,108]:[255,184,196],k=l.mode==='time'?Math.sin(Math.PI*n)*(l.hour>12?.6:.45):0;return mix([255,255,255],mix(mix([255,255,255],[172,186,232],n),warm,k),l.ambient).map(Math.round)}
 export class MapRenderer{
  constructor(project,images=new Map()){this.project=project;this.images=images;this.cache=new Map()}
- roadTexture(ctx,material){const p=this.project,key=[material,p.seed,nightness(p)].join(':');this.roadTextures||=new Map();if(this.roadTextures.has(key))return this.roadTextures.get(key);const c=document.createElement('canvas');c.width=300;c.height=210;const cc=c.getContext('2d'),data=cc.createImageData(c.width,c.height),n=nightness(p);for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)data.data.set([...terrainRGB(material,x,y,p.seed,n),255],(y*c.width+x)*4);cc.putImageData(data,0,0);const pattern=ctx.createPattern(c,'repeat');this.roadTextures.set(key,pattern);if(this.roadTextures.size>12)this.roadTextures.delete(this.roadTextures.keys().next().value);return pattern}
+ roadTexture(ctx,material){const p=this.project,key=[material,p.seed,nightness(p)].join(':');this.roadTextures||=new Map();if(this.roadTextures.has(key))return this.roadTextures.get(key);const c=document.createElement('canvas');c.width=300;c.height=210;const cc=c.getContext('2d'),data=cc.createImageData(c.width,c.height),n=nightness(p);for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)data.data.set([...roadTextureRGB(material,x,y,p.seed,n),255],(y*c.width+x)*4);cc.putImageData(data,0,0);const pattern=ctx.createPattern(c,'repeat');this.roadTextures.set(key,pattern);if(this.roadTextures.size>12)this.roadTextures.delete(this.roadTextures.keys().next().value);return pattern}
  drawRoads(ctx,{x,y,zoom,width,height}){
   const p=this.project,roads=[...(p.roads||[]),...(this.previewRoad?[this.previewRoad]:[])];if(!roads.length)return;ctx.save();ctx.beginPath();ctx.rect(0,0,p.cols*p.cell,p.rows*p.cell);ctx.clip();ctx.lineCap=ctx.lineJoin='round';
   for(const r of roads){const b=roadGeometry(r).bounds;if(!b||b.x1<x||b.y1<y||b.x0>x+width/zoom||b.y0>y+height/zoom)continue;traceRoad(ctx,r);ctx.strokeStyle=this.roadTexture(ctx,r.material)||`rgb(${terrainRGB(r.material,0,0,p.seed,nightness(p)).join(',')})`;const inner=Math.max(2,r.width*(1-r.softness));if(r.softness>0)for(let i=0;i<8;i++){ctx.globalAlpha=1/(10-i);ctx.lineWidth=r.width-(r.width-inner)*i/8;ctx.stroke()}ctx.globalAlpha=1;ctx.lineWidth=inner;ctx.stroke()}

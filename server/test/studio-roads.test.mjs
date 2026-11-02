@@ -1,7 +1,18 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createMap,validateMap,resizedMap,roadGeometry,nearestRoadPoint,pickRoad,pointWalkable,MapRenderer,MAP_RUNTIME_VERSION} from '../../dist/studio/maps/runtime.mjs';
+import {createMap,validateMap,resizedMap,roadGeometry,nearestRoadPoint,pickRoad,pointWalkable,MapRenderer,MAP_RUNTIME_VERSION,roadTextureRGB,terrainRGB} from '../../dist/studio/maps/runtime.mjs';
 const road=(id='road_1')=>({id,material:'dirt',width:100,softness:.25,smoothness:.8,points:[{x:200,y:200},{x:500,y:500},{x:850,y:260},{x:1200,y:650}]});
+test('dirt/sand road repeat edges have no noise discontinuity in either axis, day/night or seed',()=>{
+ for(const type of ['dirt','sand'])for(const seed of [1,7,97,2026])for(const n of [0,.5,1])for(let i=0;i<300;i+=7){
+  const a=roadTextureRGB(type,i,209,seed,n),b=roadTextureRGB(type,i,210,seed,n),c=roadTextureRGB(type,299,i,seed,n),d=roadTextureRGB(type,300,i,seed,n);a.forEach((v,k)=>assert.ok(Math.abs(v-b[k])<=1,`${type} horizontal wrap ${seed} ${n}`));c.forEach((v,k)=>assert.ok(Math.abs(v-d[k])<=1,`${type} vertical wrap ${seed} ${n}`));
+  assert.deepEqual(roadTextureRGB(type,i,0,seed,n),roadTextureRGB(type,i,210,seed,n));assert.deepEqual(roadTextureRGB(type,0,i,seed,n),roadTextureRGB(type,300,i,seed,n));
+ }
+ // Reproduce the old visible horizontal stripe, without involving a grid.
+ assert.ok(Math.abs(terrainRGB('dirt',20,209,7,1)[0]-terrainRGB('dirt',20,0,7,1)[0])>1);
+});
+test('seamless road texture retains flagstone joints, deterministic variation and night palette',()=>{
+ assert.deepEqual(roadTextureRGB('stone',0,50,7),[96,96,108]);assert.deepEqual(roadTextureRGB('stone',0,50,7,1),[41,44,58]);assert.notDeepEqual(roadTextureRGB('stone',80,50,7),[96,96,108]);assert.notDeepEqual(roadTextureRGB('dirt',25,30,7),roadTextureRGB('dirt',90,125,7));assert.deepEqual(roadTextureRGB('dirt',25,30,7),roadTextureRGB('dirt',325,240,7));
+});
 test('roads remain optional for old maps and roundtrip with map format unchanged',()=>{
  const p=createMap();delete p.roads;assert.equal(validateMap(p).format,'darkin-map-v1');assert.equal(pickRoad(p,10,10),null);p.roads=[road()];assert.deepEqual(validateMap(JSON.parse(JSON.stringify(p))).roads,p.roads);assert.deepEqual(resizedMap(p,40,30).roads,p.roads);assert.throws(()=>resizedMap(p,4,4));assert.equal(MAP_RUNTIME_VERSION,2);
 });

@@ -16,7 +16,35 @@ Phần lớn nền của game gốc là code, không có ảnh grass-tile.png đ
 Bảng nền dùng palette cỏ/đất/rêu/nước của `fieldgen.js` và cách kẻ đá lát
 150×105 của `world.js`, dựng lại thành các ô nền thủ tục có seed. Cát/nước và
 giao diện cọ là bản thích nghi cho editor, không tuyên bố tái tạo nguyên pixel,
-autotile, ánh sáng hay shader nước của client gốc. Giữ seed để nền ổn định.
+autotile hay shader nước của client gốc. Giữ seed để nền ổn định.
+
+## Ngày / đêm & ánh sáng
+
+Bấm **☀ Ngày / ☾ Đêm** ở đầu màn hình để đổi nhanh, hoặc mở **☰ → Ngày /
+đêm & ánh sáng** rồi chọn **Mẫu đêm · đồng cỏ** để thử phong cách nền trong game.
+Map cũ chưa có thiết lập vẫn mở ở ban ngày, không tự ép chuyển đêm.
+
+- Ban đêm có bảng màu riêng: cỏ xanh rêu, đường xám xanh, nước xanh sẫm;
+  không chỉ là phủ một lớp đen lên bảng màu ban ngày.
+- Theo giờ: thời điểm cố định 0–23.75, bình minh 5–7h và hoàng hôn
+  17.5–19.5h, chuyển màu nền và ánh sáng ấm như công thức trong client lưu trữ.
+  Đây là preview theo giờ, chưa tự chạy chu kỳ/thời gian online.
+- Sắc xanh môi trường: 0–100%, áp lên cả nền, ảnh vật thể và nhân vật trong
+  `drawActor`. Giảm về 0 chỉ bỏ nhuộm màu, vẫn giữ bảng màu nền đêm.
+- Tối viền và quầng sáng quanh người thử có thể bật riêng. Khi chỉnh map chưa
+  chạy thử, không có người thử nên không vẽ quầng sáng.
+- Mềm mép cỏ/đất/cát và chi tiết cỏ/đốm nền bật riêng. Không làm thay đổi
+  vùng đi lại, nước hoặc vùng cản. Không tự recolor nội dung ảnh nền tải lên.
+
+Các trường nằm trong `project.lighting` và đi theo project, bundle, nháp,
+Hoàn tác/Làm lại và web offline. Web offline có nút **Ánh sáng đã lưu** để
+trở về thiết lập được xuất sau khi thử màu khác. Cả loader và renderer dùng
+cùng một mã bộ phát; không cần tải shader từ game gốc.
+
+Palette/noise đồng cỏ dựa trên `fieldgen.js`/`core.js`; màu đá từ `world.js`,
+chu kỳ sáng tối từ `game.js` và sắc ấm bình minh/hoàng hôn từ `minimap.js`.
+Ánh sáng là bản dựng lại cho editor: chưa có đèn đuốc/vùng sáng khai báo riêng,
+đổ bóng động hoặc toàn bộ hiệu ứng của game gốc, không cam kết giống từng pixel.
 
 Thư viện đọc ảnh từ GitHub như Studio hiện tại. Khi lưu/xuất, chỉ ảnh đang
 được dùng và ảnh bạn tải riêng được nhúng vào file; không tải cả kho game.
@@ -63,6 +91,8 @@ Không đưa file map vào CutoutPlayer. Loader map và loader nhân vật tách
 import {DarkinMapPlayer} from './map-runtime.mjs';
 const bundle = await fetch('/game-data/maps/forest.map-bundle.json').then(r => r.json());
 const map = await DarkinMapPlayer.load(bundle); // Ảnh đã nhúng: không cần GitHub.
+// Lighting đã lưu được đọc tự động. Muốn game đổi thời điểm:
+// map.project.lighting = {...map.project.lighting, mode:'time', hour:22};
 // Trong vòng lặp:
 const warp = map.update(dt, inputX, inputY);
 map.draw(ctx, width, height, {

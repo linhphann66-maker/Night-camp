@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {createMap,validateMap,resizedMap,paintLine,cellIndex,pointWalkable,canWalk,moveActor,objectLocal,objectWorld,objectBounds,pickObject,warpAt,terrainRGB,MapRenderer} from '../../dist/studio/maps/runtime.mjs';
+import {createMap,validateMap,resizedMap,paintLine,cellIndex,pointWalkable,canWalk,moveActor,objectLocal,objectWorld,objectBounds,pickObject,warpAt,terrainRGB,groundRGB,MapRenderer,DEFAULT_LIGHTING,lightingSettings,nightness,ambientRGB} from '../../dist/studio/maps/runtime.mjs';
+import {standalonePreview} from '../../dist/studio/maps/preview.mjs';
 const src='data:image/png;base64,aGVsbG8=';
 function asset(p,id='tree'){p.assets[id]={src,w:100,h:160,ax:.5,ay:1,kind:'tree',collider:null,walk:null};return id}
 function object(p,opts={}){const o={id:'object_'+p.objects.length,asset:asset(p),x:200,y:200,scale:1,rotation:0,flip:false,layer:'sorted',collider:null,walk:null,...opts};p.objects.push(o);return o}
@@ -34,8 +35,29 @@ test('picking respects layers and foot depth; warp trigger is data for the targe
 test('procedural ground is deterministic, seed-sensitive and flagstone seams use the original spacing',()=>{
  assert.deepEqual(terrainRGB('grass',123,456,7),terrainRGB('grass',123,456,7));assert.notDeepEqual(terrainRGB('grass',123,456,7),terrainRGB('grass',123,456,97));assert.deepEqual(terrainRGB('stone',0,50,7),[96,96,108]);assert.notDeepEqual(terrainRGB('stone',80,50,7),[96,96,108]);
 });
-test('large-map overview reuses a tile per terrain type instead of thrashing thousands of unique raster tiles',()=>{
- const p=createMap({cols:128,rows:128}),renderer=new MapRenderer(p),seen=new Set(),ctx=new Proxy({globalAlpha:1},{get:(o,k)=>k in o?o[k]:()=>{}});renderer.tile=(type,x,y)=>{seen.add([type,x,y].join(':'));return {}};renderer.draw(ctx,{width:400,height:650,zoom:.06});assert.equal(seen.size,1);seen.clear();renderer.draw(ctx,{width:400,height:650,zoom:1});assert.ok(seen.size>10);
+test('legacy maps stay day, optional lighting is validated, serialized, resized and independent of terrain/collisions',()=>{
+ const p=createMap(),before=structuredClone(p);assert.equal(nightness(p),0);assert.deepEqual(lightingSettings(p),DEFAULT_LIGHTING);p.lighting={mode:'night',hour:22,ambient:.8,vignette:true,playerLight:false,blend:true,details:true};assert.equal(nightness(p),1);const q=validateMap(JSON.parse(JSON.stringify(p)));assert.deepEqual(q.lighting,p.lighting);assert.deepEqual(resizedMap(q,40,30).lighting,p.lighting);for(const k of ['terrain','blocked','walkable','objects'])assert.deepEqual(p[k],before[k]);
+ for(const lighting of [null,[],{mode:'unknown'},{ambient:2},{ambient:'1'},{hour:24},{hour:NaN},{vignette:1},{details:'true'},{unknown:true}])assert.throws(()=>validateMap({...p,lighting}));
+});
+test('fixed hour matches the original dawn/dusk thresholds with smooth palette interpolation',()=>{
+ const p=createMap();for(const [hour,n]of [[0,1],[5,1],[6,.5],[7,0],[12,0],[17.5,0],[18.5,.5],[19.5,1],[23.99,1]]){p.lighting={mode:'time',hour};assert.equal(nightness(p),n)}
+ for(const type of ['grass','dirt','stone','sand','water','moss']){const d=terrainRGB(type,90,90,7,0),n=terrainRGB(type,90,90,7,1),h=terrainRGB(type,90,90,7,.5);assert.ok(n.reduce((a,b)=>a+b)<d.reduce((a,b)=>a+b));h.forEach((v,i)=>assert.ok(Math.abs(v-(d[i]+n[i])/2)<=1))}assert.deepEqual(terrainRGB('stone',0,50,7,1),[41,44,58]);
+});
+test('soft terrain edges preserve interiors and do not blend water, stone or custom images',()=>{
+ const p=createMap();p.terrain[1]='dirt';const plain=terrainRGB('grass',63,32,7);assert.notDeepEqual(groundRGB(p,'grass',63,32,0),plain);assert.deepEqual(groundRGB(p,'grass',32,32,0),terrainRGB('grass',32,32,7));p.lighting={blend:false};assert.deepEqual(groundRGB(p,'grass',63,32,0),plain);delete p.lighting;p.terrain[1]='water';assert.deepEqual(groundRGB(p,'grass',63,32,0),plain);assert.deepEqual(groundRGB(p,'stone',63,32,0),terrainRGB('stone',63,32,7));
+});
+test('standalone preview embeds identical saved lighting and safe JSON, with local comparison controls',()=>{
+ const p=createMap();p.name='</script><img src=x>';p.lighting={mode:'night',hour:22,ambient:.6};const text=standalonePreview(p,'// runtime');assert.ok(text.includes('"mode":"night","hour":22,"ambient":0.6'));assert.ok(!text.includes('</script><img'));assert.ok(text.includes('id="original"'));assert.ok(text.includes('id="mode"'));assert.ok(!text.includes('src="http'));
+});
+test('large-map overview uses one whole-world raster instead of thrashing thousands of detail tiles',()=>{
+ const p=createMap({cols:128,rows:128}),renderer=new MapRenderer(p),seen=new Set(),ctx=new Proxy({globalAlpha:1},{get:(o,k)=>k in o?o[k]:()=>{}});let overviewCalls=0;renderer.overview=()=>{overviewCalls++;return {}};renderer.tile=(type,x,y)=>{seen.add([type,x,y].join(':'));return {}};renderer.draw(ctx,{width:400,height:650,zoom:.06});assert.equal(seen.size,0);assert.equal(overviewCalls,1);renderer.draw(ctx,{width:400,height:650,zoom:1});assert.ok(seen.size>10);
+});
+test('ambient keeps original night blue and warm dusk/dawn, zero strength is neutral',()=>{
+ const p=createMap();assert.deepEqual(ambientRGB(p),[255,255,255]);p.lighting={mode:'night'};assert.deepEqual(ambientRGB(p),[172,186,232]);p.lighting={mode:'time',hour:18.5};const dusk=ambientRGB(p);assert.ok(dusk[0]>dusk[2]);p.lighting.hour=6;const dawn=ambientRGB(p);assert.notDeepEqual(dawn,dusk);p.lighting.ambient=0;assert.deepEqual(ambientRGB(p),[255,255,255]);
+});
+test('detail and overview caches invalidate on palette/neighbor changes; overlays remain above ambient',()=>{
+ const old=globalThis.document,calls=[],fakeCtx=new Proxy({createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),createRadialGradient:()=>({addColorStop(){}}),drawImage:()=>calls.push('image'),strokeRect:()=>calls.push('overlay'),fillText:()=>calls.push('marker')},{get:(o,k)=>k in o?o[k]:()=>{}});globalThis.document={createElement:()=>({getContext:()=>fakeCtx})};
+ try{const p=createMap({cols:4,rows:4}),r=new MapRenderer(p),a=r.tile('grass',0,0);assert.equal(r.tile('grass',0,0),a);p.lighting={mode:'night',vignette:false};assert.notEqual(r.tile('grass',0,0),a);const b=r.tile('grass',0,0);p.terrain[1]='dirt';assert.notEqual(r.tile('grass',0,0),b);const small=r.overview();assert.equal(r.overview(),small);assert.equal(small.width,16);p.terrain[1]='water';assert.notEqual(r.overview(),small);p.lighting.mode='day';assert.notEqual(r.overview(),small);p.lighting.mode='night';r.atmosphere=()=>calls.push('lighting');r.draw(fakeCtx,{width:200,height:200,zoom:1,grid:true,markers:true});assert.ok(calls.indexOf('overlay')>calls.indexOf('lighting'));assert.ok(calls.indexOf('marker')>calls.indexOf('lighting'))}finally{if(old===undefined)delete globalThis.document;else globalThis.document=old}
 });
 test('renderer keeps canvas save/restore balanced with optional markers, draws depth-sorted props and skips off-screen sprites',()=>{
  const p=createMap();object(p,{id:'tree_behind',y:180});object(p,{id:'tree_front',y:230});object(p,{id:'out',x:1800,y:1300});let depth=0;const calls=[];const ctx=new Proxy({save:()=>depth++,restore:()=>{depth--;assert.ok(depth>=0)},drawImage:(img)=>{if(img==='tree')calls.push('tree')},globalAlpha:1},{get:(o,k)=>k in o?o[k]:()=>{}});const r=new MapRenderer(p,new Map([['tree','tree']]));r.tile=()=>({});r.draw(ctx,{width:500,height:500,actor:{x:200,y:210},drawActor:()=>calls.push('hero'),markers:true});assert.equal(depth,0);assert.deepEqual(calls,['tree','hero','tree']);r.draw(ctx,{width:500,height:500,markers:false});assert.equal(depth,0);

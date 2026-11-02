@@ -74,7 +74,9 @@ on('stage','pointerdown',e=>{
  if(state.busy||!state.project)return;e.preventDefault();const pt=world(e),tool=$('tool').value;
  if(state.playing){const r=dimensions();const dx=pt[0]-state.actor.x,dy=pt[1]-state.actor.y;state.target={x:state.actor.x+dx,y:state.actor.y+dy};return}
  cv.setPointerCapture(e.pointerId);if(tool==='pan'||e.button===1){drag={kind:'pan',pointer:e.pointerId,start:screen(e),x:camera.x,y:camera.y};return}
- if(cellIndex(state.project,...pt)<0)return;
+ // Sprites anchored on an edge may extend outside the terrain. Hit-test their
+ // visible overhang too; only painting, placement and spawn need a terrain cell.
+ if(!['select','erase'].includes(tool)&&cellIndex(state.project,...pt)<0)return;
  if(tool==='paint'||['block','clearBlock','walk','clearWalk'].includes(tool)){drag={kind:'paint',pointer:e.pointerId,before:snapshot(),previous:pt};brushAt(pt,pt);return}
  if(tool==='spawn'){update(p=>p.spawn={x:Math.round(pt[0]),y:Math.round(pt[1])});message('Đã đặt spawn; bật Chạy thử để kiểm tra vùng đi.');return}
  if(tool==='place'){

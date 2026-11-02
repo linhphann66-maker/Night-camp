@@ -32,6 +32,11 @@ test('movement normalizes diagonals, stops at map edges and substeps cannot jump
 test('picking respects layers and foot depth; warp trigger is data for the target-map loader',()=>{
  const p=createMap(),back=object(p,{id:'back',y:210}),front=object(p,{id:'front',y:220}),ground=object(p,{id:'ground',y:230,layer:'ground'});assert.equal(pickObject(p,200,180).id,'front');ground.layer='front';assert.equal(pickObject(p,200,180).id,'ground');p.warps.push({id:'east',x:500,y:500,radius:40,to:'woods',at:'west'});validateMap(p);assert.equal(warpAt(p,510,500).to,'woods');assert.equal(warpAt(p,100,100),null);
 });
+test('edge-anchored sprites remain pickable outside terrain on all four sides and at a rotated/flipped corner',()=>{
+ const cases=[{x:500,y:0,pt:[500,-80]},{x:0,y:500,pt:[-25,420]},{x:2048,y:500,pt:[2073,420]},{x:500,y:1536,pt:[500,1536]}];
+ for(const {pt,...opts}of cases){const p=createMap(),o=object(p,opts);validateMap(p);assert.equal(cellIndex(p,...pt),-1);assert.equal(pickObject(p,...pt)?.id,o.id);const untouched=JSON.stringify(p);assert.equal(pickObject(p,-500,-500),null);assert.equal(JSON.stringify(p),untouched)}
+ const p=createMap(),o=object(p,{x:0,y:0,rotation:.5,flip:true,scale:1.5}),pt=objectWorld(o,20,-80);assert.equal(cellIndex(p,...pt),-1);assert.equal(pickObject(p,...pt)?.id,o.id);
+});
 test('procedural ground is deterministic, seed-sensitive and flagstone seams use the original spacing',()=>{
  assert.deepEqual(terrainRGB('grass',123,456,7),terrainRGB('grass',123,456,7));assert.notDeepEqual(terrainRGB('grass',123,456,7),terrainRGB('grass',123,456,97));assert.deepEqual(terrainRGB('stone',0,50,7),[96,96,108]);assert.notDeepEqual(terrainRGB('stone',80,50,7),[96,96,108]);
 });

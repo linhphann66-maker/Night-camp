@@ -3,6 +3,7 @@
 .outfit-fit legend{font-size:11px;color:#d3ed92;padding:0 4px}
 .outfit-fit label{margin-bottom:8px}
 .outfit-fit .hint{margin:4px 0;font-size:11px}
+.outfit-fit a{display:block;color:#d3ed92;font-size:12px;margin:6px 0}
 .viewbar>div{flex-wrap:wrap}
 .pet-mode-dialog{position:fixed;inset:0;margin:0;padding:0;width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;border:0;border-radius:0;background:#10161e;overflow:hidden}
 .pet-mode-dialog iframe{display:block;width:100%;height:100%;border:0}

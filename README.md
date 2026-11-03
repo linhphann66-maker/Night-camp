@@ -113,15 +113,31 @@ Sửa thao tác rig và nhập ảnh tách mảnh:
   khoét mất chi tiết ở bản cũ phải cắt lại từ ảnh gốc, không tự phục hồi.
 - **Tự căn trang phục** mặc định bật khi tải ảnh riêng hoặc gán các mảnh đã
   tách. Chọn **Bộ chuẩn** (traveler, silas...) trong mục Nhân vật hoặc ngay
-  hộp tách ảnh/tài nguyên. Studio đo phần ảnh có nét, bỏ viền trong suốt, giữ
-  tỷ lệ ảnh và căn chiều cao đầu / chiều dài chuỗi xương thân, tay, chân theo
-  dữ liệu gốc của bộ chuẩn; các khớp được chuyển sang tọa độ ảnh mới cùng lúc.
+  hộp tách ảnh/tài nguyên. Mặc định **Khớp tỷ lệ bộ gốc · cả rộng và cao**:
+  Studio đo phần ảnh có nét, bỏ viền trong suốt, khớp riêng chiều rộng/cao của
+  mỗi bộ phận và giữ các vector khớp theo bộ chuẩn. Đây là thay tỷ lệ hiển thị
+  hai trục để ảnh khác phong cách vẫn có vóc dáng chuẩn; không sửa pixel gốc.
+  Chế độ **Giữ tỷ lệ ảnh · chỉ khớp chiều dài (cũ)** vẫn có thể chọn riêng.
+  Với đầu tóc dài, nếu cả ảnh mới lẫn ảnh chuẩn có vùng mặt đủ tin cậy, dùng
+  mặt/cằm để xác định cổ, khớp rộng đầu và khoảng cổ→đỉnh, không lấy đáy tóc
+  làm cổ. Tóc xõa xuống dưới cổ không bị cắt nên chiều cao toàn sprite đầu
+  có thể lớn hơn sprite chuẩn. Ước lượng theo màu/cụm điểm ảnh, không phải
+  nhận diện ngữ nghĩa ML: đầu xanh, mặt thú hoặc ảnh mơ hồ sẽ quay về khung
+  bao. Trang phục khác hình dáng/vị trí khớp nhiều vẫn có thể cần chỉnh neo.
   Không dựa vào bộ đã chỉnh để tránh phóng/thu cộng dồn. Chỉ các phần đang gán
   được căn; lưu tài nguyên không gán, mở project cũ hay đổi trang phục có sẵn
-  không tự sửa kích thước. Tắt tùy chọn để giữ kích thước/khớp đang có. Đây là
-  căn theo tỷ lệ chuẩn, không nhận diện giải phẫu: ảnh khác dáng/vị trí khớp
-  nhiều vẫn cần chỉnh neo. Kết quả được lưu thẳng trong project/game bundle,
+  không tự sửa kích thước. Nút **Căn lại 6 bộ phận đang mở** sửa một project
+  đã gán ảnh ở bản cũ; có thể Hoàn tác. Tắt tùy chọn để giữ kích thước/khớp
+  đang có. Bộ chuẩn/cách căn được ghi trong `project.outfitFit` để mở lại rig
+  tùy chỉnh không quay về traveler ngoài ý muốn. Kết quả lưu trong project/bundle,
   không cần thay bộ phát và không giảm chất lượng pixel của ảnh.
+- [Bản test tiên tộc/talon](dist/studio/fit-test.html) dùng cùng hàm đo/tách/căn
+  như Studio, có đối chiếu chuẩn/cách cũ, 4 chuyển động và tải project/bundle.
+  Ảnh người dùng cung cấp chỉ đóng gói vào Site riêng ở `fit-test-data/elf-sheet.png`,
+  không đưa vào repo GitHub công khai. Chạy local có thể chọn lại PNG hoặc dùng
+  `tools/test-outfit-fit-browser.mjs <studio-url/> <private-original-png>` với
+  Playwright đã cài; script chặn URL ảnh mẫu bằng fixture riêng và xác nhận
+  kết quả từ upload Studio trùng khớp từng kích thước/khớp với trang test.
 - **Thước ngang** trên preview mặc định tắt mỗi lần mở Studio. Bật để thấy
   các vạch ngang mờ và độ cao theo đơn vị rig, mốc 0 ở mặt đất (không phải cm).
   Vạch theo đúng zoom, không chạy theo đầu hoặc theo trang phục; dừng cùng

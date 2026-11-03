@@ -63,7 +63,7 @@ function renderMeta(){const c=state.project.clip;$('clipName').value=c.name;$('k
 function renderPart(){const s=state.project.parts[state.part];$('part').value=state.part;$('anchorPart').value=state.part;$('sw').value=s.w;$('sh').value=s.h;$('overlap').value=s.overlap??0;$('overlap').disabled=!/^(arm|leg)/.test(state.part);options($('joint'),Object.keys(s.joints).map(k=>[k,k]));jointInputs();const re=new RegExp('_'+state.part+'(?:_v[0-9]+)?$');const candidates=Object.entries(catalog.sprites).filter(([n])=>re.test(n)).map(([n])=>[n,n]);options($('sprite'),[['','— Chọn ảnh thay thế —'],...candidates]);$('resources').textContent='▦ Tài nguyên đã cắt ('+(state.project.resources?.length||0)+')';}
 function jointInputs(){const j=state.project.parts[state.part].joints[$('joint').value];if(j){$('jx').value=j[0];$('jy').value=j[1]}}
 async function adopt(p){validate(p);state.project=structuredClone(p);outfitFit.refresh(p.rig);state.playing=false;state.key=0;state.time=0;await syncRig();const defaults=NC.Anim.setup(animationContext(0));for(const key of state.project.clip.keys)key.P={...defaults,...key.P};setPose();renderMeta();persist()}
-async function loadRig(name){checkpoint();const p=structuredClone(state.project);p.rig=name;p.parts=Object.fromEntries(PARTS.map(part=>[part,structuredClone(catalog.sprites[`rig_${name}_${part}`])]));await adopt(p)}
+async function loadRig(name){checkpoint();const p=structuredClone(state.project);p.rig=name;delete p.outfitFit;p.parts=Object.fromEntries(PARTS.map(part=>[part,structuredClone(catalog.sprites[`rig_${name}_${part}`])]));await adopt(p)}
 function record(){checkpoint();const c=state.project.clip;const t=Math.round(state.time*1000)/1000;const key={t,curve:$('curve').value,P:structuredClone(state.pose)};const i=c.keys.findIndex(k=>Math.abs(k.t-t)<.001);if(i>=0)c.keys[i]=key;else c.keys.push(key);c.keys.sort((a,b)=>a.t-b.t);state.key=c.keys.indexOf(key);renderKeys();persist()}
 function download(name,content,type='application/json'){const a=document.createElement('a');const url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000)}
 async function preset(){checkpoint();const c=state.project.clip,name=$('preset').value,definition=NC.Anim.CLIPS[name];if(definition){c.dur=definition.dur;c.kind='attack';c.hit=definition.ev?.find(e=>e[1]==='hit')?.[0]??c.dur*.4}else{c.kind=/walk|run/i.test(name)?'walk':'loop';c.hit=Math.min(c.hit,c.dur)}const dur=c.dur,count=Math.max(9,Math.ceil(dur*30)+1);c.keys=Array.from({length:count},(_,i)=>{const t=i*dur/(count-1);return {t,curve:'lin',P:NC.Anim.sample(name,t,animationContext(t/dur))}});if(c.kind==='walk'||c.kind==='loop')c.keys.at(-1).P=structuredClone(c.keys[0].P);selectKey(0);renderMeta();persist()}
@@ -118,7 +118,15 @@ event('loadClip','click',()=>{
 });
 event('save','click',async()=>{validate(state.project);const p=await portableProject();download(p.rig+'.cutout.json',JSON.stringify(p,null,2));status('Đã lưu project kèm ảnh, phụ kiện và rig cánh; mở lại không cần kho ảnh GitHub.')});
 event('open','click',()=>$('projectFile').click());event('projectFile','change',async()=>{const f=$('projectFile').files[0];if(!f)return;if(f.size>30*1024*1024)throw Error('Project tối đa 30 MB');const p=validate(JSON.parse(await f.text()));checkpoint();await adopt(p);$('projectFile').value=''});
-const sheetImporter=mountSheetImporter({onOpen:dialog=>outfitFit.open(dialog),store:async(resources,assignments,updates=[])=>{const result=await outfitFit.apply(applyResourceChanges(state.project,resources,assignments,updates),assignments),p=result.project;validate(p);checkpoint();state.project=p;await syncRig();renderPart();persist();status('Đã lưu vai trò tài nguyên và gán '+Object.keys(assignments).length+' bộ phận.'+(result.fitted?' Tự căn '+result.fitted+' bộ phận theo '+result.reference+'; giữ tỷ lệ ảnh.':' Giữ kích thước hiện tại.'))}});
+const fitDescription=result=>result.mode==='template'?'khớp rộng/cao và khớp nối':'giữ tỷ lệ ảnh';
+const sheetImporter=mountSheetImporter({onOpen:dialog=>outfitFit.open(dialog),store:async(resources,assignments,updates=[])=>{const result=await outfitFit.apply(applyResourceChanges(state.project,resources,assignments,updates),assignments),p=result.project;validate(p);checkpoint();state.project=p;await syncRig();renderPart();persist();status('Đã lưu vai trò tài nguyên và gán '+Object.keys(assignments).length+' bộ phận.'+(result.fitted?' Tự căn '+result.fitted+' bộ phận theo '+result.reference+'; '+fitDescription(result)+'.':' Giữ kích thước hiện tại.'))}});
+event('refitOutfit','click',async()=>{
+ if(!state.project)throw Error('Chờ tải xong project');
+ const result=await outfitFit.apply(structuredClone(state.project),state.project.parts);
+ if(!result.fitted)throw Error('Bật Khớp kích thước trước khi căn lại');
+ validate(result.project);checkpoint();state.project=result.project;await syncRig();renderPart();persist();
+ status('Đã căn lại 6 bộ phận theo '+result.reference+'; '+fitDescription(result)+'. Có thể Hoàn tác.');
+});
 event('resources','click',()=>sheetImporter.gallery(state.project.resources));
 $('imageFile').accept='image/png,image/webp,image/jpeg';$('upload').textContent='＋ Thêm ảnh PNG / WebP / JPG';
 event('upload','click',()=>$('imageFile').click());event('imageFile','change',async()=>{
@@ -133,7 +141,7 @@ event('upload','click',()=>$('imageFile').click());event('imageFile','change',as
    const assignments={[state.part]:{src}},candidate=applyResourceChanges(state.project,[],assignments);
    const result=await outfitFit.apply(candidate,assignments);validate(result.project);
    checkpoint();state.project=result.project;await syncRig();renderPart();persist();
-   status('Đã thay ảnh bộ phận đang chọn.'+(result.fitted?' Tự căn theo '+result.reference+'; giữ tỷ lệ ảnh.':''));
+   status('Đã thay ảnh bộ phận đang chọn.'+(result.fitted?' Tự căn theo '+result.reference+'; '+fitDescription(result)+'.':''));
   }
  }finally{$('imageFile').value=''}
 });

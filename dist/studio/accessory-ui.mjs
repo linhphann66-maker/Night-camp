@@ -1,6 +1,7 @@
 import {makeAttachment,validateAttachments} from './attachments.mjs';
 import {alphaBounds,imageRect,previewAnchor,fitGlasses,restoreShrunkGlassesSize} from './accessory-image.mjs';
 import {mountHeadFitting} from './head-fit-ui.mjs';
+import {resolveStockHat,restoreLibraryHat} from './stock-hats.mjs';
 const el=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e};
 const options=(select,rows)=>{select.replaceChildren(...rows.map(([value,text])=>new Option(text,value)));if(rows.length)select.selectedIndex=0};
 export function mountAccessories(actions){
@@ -13,6 +14,7 @@ export function mountAccessories(actions){
  $('attachmentList').insertAdjacentHTML('afterend','<button id="editWingRig" hidden>✧ Thiết kế xương & animation cánh</button>');
  $('editWingRig').onclick=()=>document.getElementById('wingStudioButton').click();
  $('attachmentList').insertAdjacentHTML('afterend','<button id="restoreGlassesSizes">↶ Khôi phục cỡ kính bị thu nhỏ</button><p>Khôi phục hàng loạt kính còn đúng cỡ mặc định bị lỗi của bản trước. Bỏ qua cỡ đã chỉnh tay hoặc đổi tỷ lệ. Có thể Hoàn tác.</p>');
+ $('attachmentList').insertAdjacentHTML('afterend','<button id="restoreLibraryHat" hidden>↶ Khôi phục cỡ & neo mũ thư viện</button><p id="restoreLibraryHatInfo" hidden>Chỉ đặt lại cỡ, tỷ lệ, góc và điểm neo của mũ đang chọn theo dữ liệu game gốc, thay các chỉnh tay của mũ đó. Kính / món khác giữ nguyên. Có thể Hoàn tác.</p>');
  $('attachmentPreview').insertAdjacentHTML('beforebegin','<button id="fitGlasses">◎ Căn kính vào mắt · giữ nguyên cỡ</button><p>Chọn loại Kính trước khi tải ảnh. Điểm neo trên kính sẽ trùng điểm gắn trên mặt; dùng Lệch X/Y hoặc bật kéo phụ kiện để căn thêm. Căn neo không đổi Rộng/Cao, Tỷ lệ hoặc Góc.</p>');
  $('attachmentPreview').insertAdjacentHTML('afterend','<p>Kéo dấu cộng lên cầu kính (giữa hai tròng). Ảnh mới được bỏ viền trong suốt tự động; ảnh đã lưu giữ nguyên dữ liệu.</p>');
  $('attachmentSocket').options[1].text='Mắt / cầu kính';
@@ -24,7 +26,7 @@ export function mountAccessories(actions){
  function drawPreview(anchor=current()?.anchor){if(!previewImage||!anchor)return;const canvas=$('attachmentPreview'),ctx=canvas.getContext('2d'),{x,y,w,h}=previewRect;ctx.clearRect(0,0,250,190);ctx.drawImage(previewImage,x,y,w,h);ctx.strokeStyle='#e5f9a9';ctx.lineWidth=2;const px=x+anchor[0]*w,py=y+anchor[1]*h;ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.moveTo(px-10,py);ctx.lineTo(px+10,py);ctx.moveTo(px,py-10);ctx.lineTo(px,py+10);ctx.stroke()}
  async function mutate(fn){const items=structuredClone(list());fn(items);validateAttachments(items);await actions.set(items);await refresh()}
  function library(){const q=$('accessorySearch').value.trim().toLowerCase(),type=$('accessoryCategory').value;options($('accessoryCatalog'),catalog.filter(a=>a.category===type&&(a.name+' '+a.id).toLowerCase().includes(q)).map(a=>[a.id,a.id+' · '+a.name]));if(actions.project())hatFitting.refresh().catch(error=>actions.message(error.message))}
- async function refresh(){options($('attachmentList'),list().map(a=>[a.id,(a.visible===false?'○ ':'● ')+a.name]));if(!current())selected=list()[0]?.id||null;$('attachmentList').value=selected||'';const a=current();$('accessorySettings').hidden=!a;$('editWingRig').hidden=!a?.wingRig;if(!a){await hatFitting.refresh();return}
+ async function refresh(){options($('attachmentList'),list().map(a=>[a.id,(a.visible===false?'○ ':'● ')+a.name]));if(!current())selected=list()[0]?.id||null;$('attachmentList').value=selected||'';const a=current();$('accessorySettings').hidden=!a;$('editWingRig').hidden=!a?.wingRig;const stockHat=a?.socket==='head'&&!a.wingRig&&catalog.some(e=>e.id===a.sourceId&&e.category==='hat');$('restoreLibraryHat').hidden=$('restoreLibraryHatInfo').hidden=!stockHat;if(!a){await hatFitting.refresh();return}
   $('attachmentVisible').checked=a.visible!==false;$('attachmentSocket').value=a.socket;$('attachmentLayer').value=a.layer;
   const wing=!!a.wingRig;$('editWingRig').hidden=!wing;$('attachmentSocket').disabled=$('attachmentLayer').disabled=wing;
   for(const id of ['attachmentW','attachmentAX'])$(id).closest('.pair').hidden=wing;
@@ -45,6 +47,12 @@ export function mountAccessories(actions){
   }finally{$('accessoryFile').value=''}
  });
  $('fitGlasses').onclick=safe(async()=>{const a=current();if(!a)return;const img=await actions.image(a.src),{bounds}=imageBounds(img);await mutate(items=>fitGlasses(items.find(item=>item.id===a.id),bounds,img.naturalWidth,img.naturalHeight));actions.message('Đã căn kính vào mắt; giữ nguyên kích thước, tỷ lệ và góc. Kéo dấu cộng tới cầu kính để tinh chỉnh.')});
+ $('restoreLibraryHat').onclick=safe(async()=>{
+  const a=current(),entry=catalog.find(e=>e.id===a?.sourceId&&e.category==='hat');
+  const restored=restoreLibraryHat(a,entry,actions.headWidth());
+  await mutate(items=>{const i=items.findIndex(item=>item.id===a.id);if(i<0)throw Error('Mũ đang chọn vừa thay đổi');items[i]=restored});
+  actions.message('Đã khôi phục cỡ và neo chuẩn của mũ thư viện; kính / món khác giữ nguyên. Có thể Hoàn tác.');
+ });
  $('restoreGlassesSizes').onclick=safe(async()=>{const button=$('restoreGlassesSizes'),before=JSON.stringify(list()),items=structuredClone(list());let count=0;button.disabled=true;try{for(const a of items){const entry=catalog.find(e=>e.id===a.sourceId);if(entry?.category!=='glasses'&&!(a.socket==='face'&&a.src.startsWith('data:')))continue;const img=await actions.image(a.src),{bounds}=imageBounds(img);if(restoreShrunkGlassesSize(a,bounds,img.naturalWidth,img.naturalHeight,actions.headWidth(),entry?entry.sprite.h/entry.sprite.w:undefined))count++}if(JSON.stringify(list())!==before)throw Error('Phụ kiện vừa thay đổi. Hãy bấm khôi phục lại.');if(count){validateAttachments(items);await actions.set(items);await refresh()}actions.message(count?'Đã khôi phục cỡ cũ cho '+count+' kính; giữ nguyên neo và độ lệch. Có thể Hoàn tác.':'Không có kính còn khớp cỡ mặc định bị thu nhỏ. Giữ nguyên cỡ hiện tại.')}finally{button.disabled=false}});
  for(const [field,key]of [['X','x'],['Y','y'],['W','w'],['H','h'],['Scale','scale'],['Rotation','rotation']])$('attachment'+field).onchange=safe(()=>{const value=$('attachment'+field).valueAsNumber;return mutate(items=>{items.find(a=>a.id===selected)[key]=field==='Rotation'?value*Math.PI/180:value})});
  for(const [id,key]of [['attachmentSocket','socket'],['attachmentLayer','layer']])$(id).onchange=safe(()=>mutate(items=>items.find(a=>a.id===selected)[key]=$(id).value));
@@ -58,5 +66,5 @@ export function mountAccessories(actions){
  preview.onpointercancel=preview.onlostpointercapture=()=>{if(!drag)return;actions.previewAnchor?.(drag.id,drag.original);drag=null;drawPreview();const a=current();if(a){$('attachmentAX').value=a.anchor[0];$('attachmentAY').value=a.anchor[1]}};
  preview.oncontextmenu=e=>e.preventDefault();
  $('removeAccessory').onclick=safe(()=>mutate(items=>{items.splice(items.findIndex(a=>a.id===selected),1)}));
- return {refresh,selected:current,dragEnabled:()=>$('dragAccessory').checked&&!!current(),updatePosition:()=>{const a=current();if(a){$('attachmentX').value=a.x.toFixed(2);$('attachmentY').value=a.y.toFixed(2)}},setCatalog(entries){catalog=entries||[];const counts={};for(const e of catalog)counts[e.category]=(counts[e.category]||0)+1;$('accessorySummary').textContent=`${counts.hat||0} mũ/tai nghe · ${counts.weapon||0} vũ khí · ${counts.glasses||0} kính`;library()}};
+ return {refresh,selected:current,dragEnabled:()=>$('dragAccessory').checked&&!!current(),updatePosition:()=>{const a=current();if(a){$('attachmentX').value=a.x.toFixed(2);$('attachmentY').value=a.y.toFixed(2)}},setCatalog(entries,build){catalog=(entries||[]).map(e=>resolveStockHat(e,build));const counts={};for(const e of catalog)counts[e.category]=(counts[e.category]||0)+1;$('accessorySummary').textContent=`${counts.hat||0} mũ/tai nghe · ${counts.weapon||0} vũ khí · ${counts.glasses||0} kính`;library()}};
 }

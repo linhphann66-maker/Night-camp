@@ -199,6 +199,18 @@ không chỉnh các phụ kiện khác hoặc animation. Hỗ trợ Hoàn tác; 
 project cũ khi mở lại. Các mốc và kết quả được lưu trong project/bundle;
 kết quả là các trường transform sẵn có nên bộ phát không cần thuật toán nhận diện.
 
+**Mũ có sẵn trong thư viện:** dùng số `fit/seat/dx` đã được tác giả game căn
+trong `js/hatfit_data.js`, không lấy riêng giá trị mặc định từ catalog server.
+Ví dụ Paladin dùng `fit=1.205`, `seat=.497`, `dx=-.179` thay cho cỡ cũ `1.63`.
+Profile gốc còn đóng gói cùng Studio để catalog GitHub bị cache không làm mũ
+to/lệch trở lại; chỉ áp dụng cho đúng build. Không đổi cỡ kính hoặc ảnh tải riêng.
+Với mũ đã gắn ở project cũ: chọn mũ → **Khôi phục cỡ & neo mũ thư viện**.
+Nút chỉ đặt lại transform của mũ đó, bỏ mốc auto-fit cũ của nó; không đổi đầu,
+trang phục, animation, kính hay món khác và có thể Hoàn tác. Mở project không
+tự ghi đè chỉnh tay. Cỡ/neo đã sửa được lưu thẳng vào project/bundle như trước.
+Tái tạo riêng danh mục phụ kiện và profile bằng
+`node tools/build-studio-catalog.mjs --accessories-only`.
+
 Khi nạp clip Pose Studio, Studio giữ đường cong `snap/back`, bổ sung đoạn nối
 cuối chu kỳ và giữ cả các key gốc nằm ngoài thời lượng bị khai báo thiếu.
 24 clip `shot`/`loop` được chuyển từ pose sống của engine gốc sang chu kỳ thở/lắc

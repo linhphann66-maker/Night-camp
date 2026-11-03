@@ -183,7 +183,7 @@ async function reloadSource(){
   status('Đang đọc thư viện…');
   const next=await connectSource();source=next;catalog=next.catalog;NC.POSE_LIB=next.poses;state.images.clear();
   outfitFit.refresh();
-  accessoryUI.setCatalog(next.accessories);
+  accessoryUI.setCatalog(next.accessories,next.catalog.build);
   options($('rig'),catalog.rigs.map(n=>[n,n]));
   options($('existing'),Object.entries(NC.POSE_LIB||{}).map(([id,c])=>[id,c.name+' · '+poseClipDescription(c)]));describeExistingClip();
   const current=$('preset').value;

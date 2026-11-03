@@ -3,17 +3,18 @@ import path from 'node:path';
 import vm from 'node:vm';
 const root = path.resolve(import.meta.dirname, '..');
 const base = path.join(root, 'dist-full/game-20261025-1758');
+const accessoriesOnly=process.argv.includes('--accessories-only');
 const NC = {};
 const context = vm.createContext({ NC, window: { NC }, console: { log() {}, warn() {} } });
 for (const file of fs.readdirSync(path.join(base, 'assets')).filter(f => f === 'manifest.js' || f.endsWith('.manifest.js')).sort()) {
-  try { vm.runInContext(fs.readFileSync(path.join(base, 'assets', file), 'utf8'), context, { timeout: 1000 }); }
+  try { vm.runInContext(fs.readFileSync(path.join(base, 'assets', file), 'utf8'), context, { timeout: 10000 }); }
   catch (error) { console.warn(`${file}: ${error.message}`); }
 }
 const sprites = Object.fromEntries(Object.entries(NC.ASSET_MANIFEST || {}).filter(([name, s]) => name.startsWith('rig_') && s.joints && fs.existsSync(path.join(base, s.src))));
 const parts = ['head','torso','armF','armB','legF','legB'];
 const rigs = [...new Set(Object.keys(sprites).map(n => n.replace(/^rig_/, '').replace(/_(head|torso|armF|armB|legF|legB)$/, '')))].filter(r => parts.every(p => sprites[`rig_${r}_${p}`])).sort();
 fs.mkdirSync(path.join(root, 'dist/studio'), { recursive: true });
-fs.writeFileSync(path.join(root, 'dist/studio/catalog.json'), JSON.stringify({ build:'game-20261025-1758', rigs, sprites }));
+if(!accessoriesOnly)fs.writeFileSync(path.join(root, 'dist/studio/catalog.json'), JSON.stringify({ build:'game-20261025-1758', rigs, sprites }));
 const files=[],seen=new Set();
 function walk(dir,origin,storage){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory())walk(p,origin,storage);else{const relative=path.relative(origin,p).replaceAll(path.sep,'/');if(seen.has(relative))continue;seen.add(relative);const ext=path.extname(p).toLowerCase();const kind=['.png','.webp','.jpg','.jpeg','.svg'].includes(ext)?'image':['.m4a','.mp3','.ogg','.wav'].includes(ext)?'audio':relative.endsWith('.rig.js')?'spine':/anim|pose|spine|rig/i.test(relative)?'animation':'source';files.push({path:relative,storage,kind,bytes:fs.statSync(p).size})}}}
 walk(base,base,'dist-full');
@@ -22,16 +23,25 @@ walk(compact,compact,'dist');
 const allSprites=Object.assign({},...Object.entries(NC).filter(([key])=>key.startsWith('ASSET_MANIFEST')).map(([,value])=>value));
 const items=JSON.parse(fs.readFileSync(path.join(root,'server/data-catalog/catalog.json'),'utf8')).ITEMS;
 const itemBySprite=new Map(Object.values(items).filter(i=>i.sprite).map(i=>[i.sprite,i]));
+// items.js applies these authored fits AFTER its code defaults. The server
+// item catalog alone does not contain this final wearing profile.
+vm.runInContext(fs.readFileSync(path.join(base,'js/hatfit_data.js'),'utf8'),context,{timeout:1000});
+const hatFits=NC.HATFIT_DATA.hats;
+fs.writeFileSync(path.join(root,'dist/studio/stock-hat-fits.mjs'),`// Generated from original js/hatfit_data.js; do not hand-tune individual entries here.\nexport const STOCK_HAT_BUILD='game-20261025-1758';\nexport const STOCK_HAT_FITS=${JSON.stringify(hatFits,null,2)};\n`);
 const accessories=[];
 for(const [id,s]of Object.entries(allSprites)){
  if(!s?.src||!seen.has(s.src)||!Number.isFinite(s.w)||!Number.isFinite(s.h))continue;
  const item=itemBySprite.get(id),category=item?.slot==='weapon'||Number.isFinite(s.grip)?'weapon':item?.slot==='glasses'||/^glasses_/.test(id)?'glasses':item?.slot==='hat'||/^hat_/.test(id)?'hat':null;
  if(!category)continue;
  if(category==='hat'&&/_(fill|rim|front|back|mask|vein|glow)$/.test(id))continue;
- accessories.push({id,name:item?.name||id,category,sprite:s,fit:item?.fit??s.wear?.fit??1.3,seat:item?.seat??s.wear?.seat??0,dx:item?.dx??0,grip:item?.grip??s.grip??.2,wtype:item?.wtype||'sword'});
+ const entry={id,name:item?.name||id,category,sprite:s,fit:item?.fit??s.wear?.fit??1.3,seat:item?.seat??s.wear?.seat??0,dx:item?.dx??0,grip:item?.grip??s.grip??.2,wtype:item?.wtype||'sword'};
+ const fitId=item?.id||id,authored=category==='hat'&&(hatFits[fitId]||hatFits[id]);
+ if(authored){for(const key of ['dx','seat','fit','clip'])if(authored[key]!==undefined)entry[key]=authored[key];entry.hatFitId=hatFits[fitId]?fitId:id}
+ accessories.push(entry);
 }
 fs.writeFileSync(path.join(root,'dist/studio/accessories.json'),JSON.stringify(accessories));
 console.log('Accessories: '+accessories.length+' (includes headphones: '+accessories.some(a=>/headphones/.test(a.id))+')');
+if(accessoriesOnly)process.exit(0);
 vm.runInContext(fs.readFileSync(path.join(base,'js/poselib_data.js'),'utf8'),context);
 const spine=[];
 for(const [file,key] of [['herospine.rig.js','HERO_SPINE'],['petspine.rig.js','PET_SPINE'],['baphspine.rig.js','BAPH_SPINE']]){

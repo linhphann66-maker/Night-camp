@@ -16,6 +16,7 @@ export function validateMap(p){
  if(p.lighting!==undefined){const l=p.lighting;if(!l||typeof l!=='object'||Array.isArray(l)||Object.keys(l).some(k=>!Object.hasOwn(DEFAULT_LIGHTING,k)))fail('Thiết lập ánh sáng không hợp lệ');const v=lightingSettings(p);if(!['day','night','time'].includes(v.mode)||!finite(v.hour,0,23.99)||!finite(v.ambient,0,1)||['vignette','playerLight','blend','details'].some(k=>typeof v[k]!=='boolean'))fail('Giờ / cường độ ánh sáng không hợp lệ')}
  if(!p.assets||Array.isArray(p.assets)||Object.keys(p.assets).length>1000)fail('Danh mục tài nguyên map không hợp lệ');
  for(const [id,s]of Object.entries(p.assets))if(!safeId(id)||!s||!validSrc(s.src)||!finite(s.w,1,4096)||!finite(s.h,1,4096)||!finite(s.ax,0,1)||!finite(s.ay,0,1)||!['tree','rock','bush','low','bridge','custom','ground'].includes(s.kind)||!shape(s.collider??null)||!shape(s.walk??null))fail('Tài nguyên không hợp lệ: '+id);
+ for(const s of Object.values(p.assets))if(['fadeBehind','groundShadow'].some(k=>s[k]!==undefined&&typeof s[k]!=='boolean')||s.grounding!==undefined&&!['image','anchor'].includes(s.grounding))fail('Thiết lập che nhân vật / chạm đất không hợp lệ');
  const n=p.cols*p.rows;for(const key of ['terrain','blocked','walkable'])if(!Array.isArray(p[key])||p[key].length!==n)fail('Sai số ô lớp '+key);
  if(p.terrain.some(id=>!Object.hasOwn(TERRAINS,id)&&p.assets[id]?.kind!=='ground')||p.blocked.some(v=>v!==0&&v!==1)||p.walkable.some(v=>v!==0&&v!==1))fail('Ô nền / vùng va chạm không hợp lệ');
  if(p.roads!==undefined){if(!Array.isArray(p.roads)||p.roads.length>128)fail('Tối đa 128 đường cong');const ids=new Set();let count=0;for(const r of p.roads){if(!r||!safeId(r.id)||ids.has(r.id)||!['dirt','sand','stone'].includes(r.material)||!finite(r.width,8,512)||!finite(r.softness,0,.9)||!finite(r.smoothness,0,1)||!Array.isArray(r.points)||r.points.length<2||r.points.length>256)fail('Đường cong không hợp lệ: cần 2–256 điểm, rộng 8–512');ids.add(r.id);count+=r.points.length;for(const v of r.points)if(!v||!finite(v.x,0,p.cols*p.cell)||!finite(v.y,0,p.rows*p.cell))fail('Điểm đường cong nằm ngoài map')}if(count>4096)fail('Tối đa 4096 điểm đường cong mỗi map')}
@@ -44,8 +45,32 @@ export function objectLocal(o,x,y){const a=-o.rotation,c=Math.cos(a),s=Math.sin(
 export function objectWorld(o,x,y){const a=o.rotation,c=Math.cos(a),s=Math.sin(a),xx=x*(o.flip?-1:1);return [o.x+(xx*c-y*s)*o.scale,o.y+(xx*s+y*c)*o.scale]}
 export function insideShape(s,x,y){if(!s)return false;const dx=(x-s.x)/(s.w/2),dy=(y-s.y)/(s.h/2);return s.type==='ellipse'?dx*dx+dy*dy<=1:Math.abs(dx)<=1&&Math.abs(dy)<=1}
 export function objectBounds(p,o){const s=p.assets[o.asset],xy=[[-s.ax*s.w,-s.ay*s.h],[(1-s.ax)*s.w,-s.ay*s.h],[-s.ax*s.w,(1-s.ay)*s.h],[(1-s.ax)*s.w,(1-s.ay)*s.h]].map(pt=>objectWorld(o,...pt));return {x0:Math.min(...xy.map(v=>v[0])),y0:Math.min(...xy.map(v=>v[1])),x1:Math.max(...xy.map(v=>v[0])),y1:Math.max(...xy.map(v=>v[1]))}}
-export function orderedObjects(p){return [...p.objects].sort((a,b)=>a.y-b.y)}
-export function pickObject(p,x,y){return [...orderedObjects(p).filter(o=>o.layer==='ground'),...orderedObjects(p).filter(o=>o.layer==='sorted'),...orderedObjects(p).filter(o=>o.layer==='front')].reverse().find(o=>{const s=p.assets[o.asset],[px,py]=objectLocal(o,x,y);return px>=-s.ax*s.w&&px<=(1-s.ax)*s.w&&py>=-s.ay*s.h&&py<=(1-s.ay)*s.h})||null}
+// Alpha is measured once per image at bounded resolution; no pixels are cropped
+// or resized in the stored asset, and there is no per-frame getImageData call.
+export function alphaGeometry(rgba,w,h){
+ let x0=w,y0=h,x1=-1,y1=-1;const alpha=new Uint8Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const a=rgba[(y*w+x)*4+3];alpha[y*w+x]=a;if(a>=24){x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y)}}if(x1<0)return null;
+ let sx=0,total=0;const band=Math.max(1,Math.ceil((y1-y0+1)*.04));for(let y=Math.max(y0,y1-band+1);y<=y1;y++)for(let x=x0;x<=x1;x++){const a=alpha[y*w+x];if(a>=24){sx+=(x+.5)*a;total+=a}}
+ return {width:w,height:h,alpha,bounds:{x0:x0/w,y0:y0/h,x1:(x1+1)/w,y1:(y1+1)/h},foot:{x:total?sx/total/w:(x0+x1+1)/2/w,y:(y1+1)/h}};
+}
+const imageGeometryCache=new WeakMap();
+export function imageGeometry(image){
+ if(!image||typeof image!=='object')return null;if(imageGeometryCache.has(image))return imageGeometryCache.get(image);let result=null;
+ try{const w=image.naturalWidth||image.width,h=image.naturalHeight||image.height;if(w&&h&&typeof document!=='undefined'){const k=Math.min(1,256/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*k));c.height=Math.max(1,Math.round(h*k));const cc=c.getContext('2d',{willReadFrequently:true});cc.drawImage(image,0,0,c.width,c.height);result=alphaGeometry(cc.getImageData(0,0,c.width,c.height).data,c.width,c.height)}}catch{/* Tainted/unreadable images retain authored anchors and rectangle fallback. */}
+ imageGeometryCache.set(image,result);return result;
+}
+export function objectGroundPoint(p,o,geometry=null){const s=p.assets[o.asset],auto=s.grounding==='image'||s.grounding===undefined&&s.user;if(!auto||!geometry)return {x:o.x,y:o.y};const [x,y]=objectWorld(o,(geometry.foot.x-s.ax)*s.w,(geometry.foot.y-s.ay)*s.h);return {x,y}}
+export function orderedObjects(p,images=null){const foot=o=>objectGroundPoint(p,o,imageGeometry(images?.get(o.asset))).y;return [...p.objects].sort((a,b)=>foot(a)-foot(b))}
+export function pickObject(p,x,y,images=null){const sorted=orderedObjects(p,images);return [...sorted.filter(o=>o.layer==='ground'),...sorted.filter(o=>o.layer==='sorted'),...sorted.filter(o=>o.layer==='front')].reverse().find(o=>{const s=p.assets[o.asset],[px,py]=objectLocal(o,x,y);return px>=-s.ax*s.w&&px<=(1-s.ax)*s.w&&py>=-s.ay*s.h&&py<=(1-s.ay)*s.h})||null}
+export function objectOccludesActor(p,o,actor,geometry=null){
+ const s=p.assets[o.asset];if(!actor||o.layer==='ground'||!(s.fadeBehind??(s.kind==='tree'||s.kind==='custom')))return false;const foot=objectGroundPoint(p,o,geometry);if(o.layer!=='front'&&actor.y>=foot.y)return false;
+ const height=actor.occlusionHeight||32,r=actor.radius??12;for(const [dx,dy]of [[0,-height*.9],[0,-height*.55],[-r*.5,-height*.55],[r*.5,-height*.55]]){const [lx,ly]=objectLocal(o,actor.x+dx,actor.y+dy),u=lx/s.w+s.ax,v=ly/s.h+s.ay;if(u<0||u>=1||v<0||v>=1)continue;if(!geometry||geometry.alpha[Math.floor(v*geometry.height)*geometry.width+Math.floor(u*geometry.width)]>=24)return true}return false;
+}
+// Explicit repair: move origins, not artwork. Preserve every placed image and
+// footprint in world space, including mirrored/rotated/scaled copies.
+export function reanchorAsset(p,id,ax,ay){
+ if(!finite(ax,0,1)||!finite(ay,0,1))fail('Neo ảnh phải nằm trong 0–1');const next=structuredClone(p),s=next.assets[id];if(!s||s.kind==='ground')fail('Chọn một vật thể để đặt neo gốc');const dx=(ax-s.ax)*s.w,dy=(ay-s.ay)*s.h,shift=shape=>{if(shape){shape.x-=dx;shape.y-=dy}};
+ for(const o of next.objects.filter(o=>o.asset===id)){const [x,y]=objectWorld(o,dx,dy);o.x=x;o.y=y;shift(o.collider);shift(o.walk)}shift(s.collider);shift(s.walk);s.ax=ax;s.ay=ay;s.grounding='anchor';return validateMap(next);
+}
 export function pointWalkable(p,x,y){
  const i=cellIndex(p,x,y);if(i<0||p.blocked[i])return false;
  let onBridge=false;for(const o of p.objects){const [lx,ly]=objectLocal(o,x,y);if(insideShape(o.collider,lx,ly))return false;if(insideShape(o.walk,lx,ly))onBridge=true}
@@ -99,6 +124,7 @@ export function groundRGB(p,type,x,y,n=nightness(p)){
 export function ambientRGB(p){const l=lightingSettings(p),n=nightness(p),warm=l.hour>12?[255,164,108]:[255,184,196],k=l.mode==='time'?Math.sin(Math.PI*n)*(l.hour>12?.6:.45):0;return mix([255,255,255],mix(mix([255,255,255],[172,186,232],n),warm,k),l.ambient).map(Math.round)}
 export class MapRenderer{
  constructor(project,images=new Map()){this.project=project;this.images=images;this.cache=new Map()}
+ drawGroundShadows(ctx,objects,visible){for(const o of objects){const s=this.project.assets[o.asset];if(s.kind==='ground'||!(s.groundShadow??!!s.user)||!visible(objectBounds(this.project,o)))continue;const g=imageGeometry(this.images.get(o.asset));if(!g)continue;const f=objectGroundPoint(this.project,o,g),w=(g.bounds.x1-g.bounds.x0)*s.w*o.scale,rx=Math.max(3,w*.2),ry=Math.max(1.5,rx*.23);ctx.save();ctx.translate(f.x,f.y);ctx.scale(rx,ry);const gradient=ctx.createRadialGradient(0,0,0,0,0,1);gradient.addColorStop(0,'rgba(8,17,20,.3)');gradient.addColorStop(1,'rgba(8,17,20,0)');ctx.fillStyle=gradient;ctx.fillRect(-1,-1,2,2);ctx.restore()}}
  roadTexture(ctx,material){const p=this.project,key=[material,p.seed,nightness(p)].join(':');this.roadTextures||=new Map();if(this.roadTextures.has(key))return this.roadTextures.get(key);const c=document.createElement('canvas');c.width=300;c.height=210;const cc=c.getContext('2d'),data=cc.createImageData(c.width,c.height),n=nightness(p);for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)data.data.set([...roadTextureRGB(material,x,y,p.seed,n),255],(y*c.width+x)*4);cc.putImageData(data,0,0);const pattern=ctx.createPattern(c,'repeat');this.roadTextures.set(key,pattern);if(this.roadTextures.size>12)this.roadTextures.delete(this.roadTextures.keys().next().value);return pattern}
  drawRoads(ctx,{x,y,zoom,width,height}){
   const p=this.project,roads=[...(p.roads||[]),...(this.previewRoad?[this.previewRoad]:[])];if(!roads.length)return;ctx.save();ctx.beginPath();ctx.rect(0,0,p.cols*p.cell,p.rows*p.cell);ctx.clip();ctx.lineCap=ctx.lineJoin='round';
@@ -128,10 +154,11 @@ export class MapRenderer{
   if(overview)ctx.drawImage(this.overview(),0,0,p.cols*cs,p.rows*cs);
   else for(let gy=Math.max(0,Math.floor(y/cs));gy<Math.min(p.rows,Math.ceil((y+height/zoom)/cs));gy++)for(let gx=Math.max(0,Math.floor(x/cs));gx<Math.min(p.cols,Math.ceil((x+width/zoom)/cs));gx++){const type=p.terrain[gy*p.cols+gx];ctx.drawImage(this.tile(type,gx,gy),gx*cs,gy*cs,cs+.2,cs+.2);if(type==='water'){ctx.strokeStyle='#d5f5ff33';ctx.lineWidth=1/zoom;ctx.beginPath();ctx.moveTo(gx*cs+8,gy*cs+cs*.5+Math.sin(time*2+gx)*3);ctx.lineTo(gx*cs+cs-8,gy*cs+cs*.5+Math.sin(time*2+gx+1)*3);ctx.stroke()}}
   this.drawRoads(ctx,{x,y,zoom,width,height});
-  const draw=o=>{if(!visible(objectBounds(p,o)))return;const s=p.assets[o.asset],img=this.images.get(o.asset);ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.rotation);ctx.scale(o.scale*(o.flip?-1:1),o.scale);if(img){if(s.kind==='tree'&&actor&&actor.y<o.y&&Math.abs(actor.x-o.x)<s.w*o.scale*.35&&actor.y>o.y-s.h*o.scale)ctx.globalAlpha=.5;ctx.drawImage(img,-s.ax*s.w,-s.ay*s.h,s.w,s.h)}ctx.restore()};
-  for(const o of orderedObjects(p).filter(o=>o.layer==='ground'))draw(o);
-  const sorted=orderedObjects(p).filter(o=>o.layer==='sorted');let done=false;const drawHero=()=>{if(drawActor)drawActor(ctx,actor);else{ctx.save();ctx.translate(actor.x,actor.y);ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(0,0,14,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#d3ed92';ctx.beginPath();ctx.arc(0,-17,12,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#2c4936';ctx.lineWidth=2;ctx.stroke();ctx.restore()}};
-  for(const o of sorted){if(actor&&!done&&actor.y<o.y){drawHero();done=true}draw(o)}if(actor&&!done)drawHero();for(const o of orderedObjects(p).filter(o=>o.layer==='front'))draw(o);
+  const objects=orderedObjects(p,this.images);this.drawGroundShadows(ctx,objects,visible);
+  const draw=o=>{if(!visible(objectBounds(p,o)))return;const s=p.assets[o.asset],img=this.images.get(o.asset);ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.rotation);ctx.scale(o.scale*(o.flip?-1:1),o.scale);if(img){if(objectOccludesActor(p,o,actor,imageGeometry(img)))ctx.globalAlpha*=.5;ctx.drawImage(img,-s.ax*s.w,-s.ay*s.h,s.w,s.h)}ctx.restore()};
+  for(const o of objects.filter(o=>o.layer==='ground'))draw(o);
+  const sorted=objects.filter(o=>o.layer==='sorted');let done=false;const drawHero=()=>{if(drawActor)drawActor(ctx,actor);else{ctx.save();ctx.translate(actor.x,actor.y);ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(0,0,14,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#d3ed92';ctx.beginPath();ctx.arc(0,-17,12,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#2c4936';ctx.lineWidth=2;ctx.stroke();ctx.restore()}};
+  for(const o of sorted){if(actor&&!done&&actor.y<objectGroundPoint(p,o,imageGeometry(this.images.get(o.asset))).y){drawHero();done=true}draw(o)}if(actor&&!done)drawHero();for(const o of objects.filter(o=>o.layer==='front'))draw(o);
   this.atmosphere(ctx,{x,y,zoom,width,height,actor});
   // Editor overlays deliberately follow lighting, so night mode cannot hide
   // collision paint, selection handles or spawn/warp markers.

@@ -72,6 +72,36 @@ Việc có file không đồng nghĩa có giấy phép phát hành: kiểm tra q
 Góc nhìn: dùng Bàn tay kéo, nút +/- hoặc bánh xe chuột; Vừa map để nhìn toàn
 bộ. Mobile có menu riêng cho từng mục, mặc định chỉ preview/vẽ map.
 
+## Ảnh riêng: che nhân vật và chạm đất
+
+Ảnh riêng dạng vật thể cao có **Mờ khi che nhân vật** và **Bóng chạm đất**.
+Chọn vật thể rồi mở **Vật thể đang chọn → Loại vật thể & chạm đất** để bật/tắt
+hoặc đổi loại ảnh. Đây là thuộc tính dùng chung cho các bản sao cùng tài nguyên;
+đổi loại không đổi kích thước, tỷ lệ hay tự tạo vùng va chạm.
+
+- Ảnh tải lên mới lấy neo ở đáy vùng có nét vẽ, không phải đáy cả khung PNG.
+  Ảnh không bị crop; rộng/cao giữ nguyên. Có thể chọn loại **Cây / vật che cao**
+  khi tải lên. Cây tải lên không bị nhân thêm hệ số thu nhỏ của thư viện cây gốc.
+- Ảnh riêng cũ không có trường mới vẫn được hỗ trợ: điểm chạm đất hiển thị,
+  thứ tự trước/sau và bóng dùng gốc nét vẽ. Không tự sửa tọa độ/vùng cản trong
+  project cũ. Viền trong suốt không làm nhân vật bị tính là đứng sau cây.
+- Mờ chỉ xảy ra khi phần ảnh có nét vẽ che vùng thân/đầu người thử. Khi đi ra
+  trước, ra khỏi ảnh hoặc qua lỗ trong tán cây, ảnh trở lại rõ. Vật thể lớp
+  ground nằm dưới nhân vật không cần mờ. Bộ phát dùng mẫu alpha có cache,
+  không đọc toàn bộ pixel ảnh lại mỗi frame.
+- **Đặt neo về gốc ảnh · giữ nguyên hình** sửa neo cho ảnh đã có trong map.
+  Các bản sao quay/lật/phóng to vẫn giữ nguyên hình và vùng cản ở vị trí cũ;
+  chỉ tọa độ gốc và tọa độ cục bộ vùng cản được quy đổi. Có Hoàn tác/Làm lại.
+  Nếu gốc thực nằm ngoài map, thao tác bị từ chối để không tự cắt/dời cây.
+- **Sắp trước/sau và bóng theo** cho chọn gốc ảnh hoặc neo thủ công. Chỉnh
+  neo X/Y thủ công sẽ dùng neo đó. Bóng nhẹ là tùy chọn; tắt nếu ảnh đã có bóng.
+
+Nhận diện alpha chỉ ước tính chân theo vùng thấp nhất có nét vẽ, không hiểu
+ngữ nghĩa của ảnh. Ảnh nền trắng/JPG không được tự tách nền; ảnh bất thường
+có thể cần chỉnh neo thủ công. Dữ liệu mới nằm ở `assets[id].grounding`
+(`image`/`anchor`), `fadeBehind`, `groundShadow`. Project/bundle/HTML offline
+giữ các lựa chọn này. Game mới cần tải lại `map-runtime.mjs` mới nhất.
+
 ## Đường cong tự do
 
 Vào **☰ → Đường cong**, chọn chất liệu **Đất / Cát / Đá lát**, độ rộng,

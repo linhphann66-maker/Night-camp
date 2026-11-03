@@ -4,6 +4,8 @@ import {mountLibrary} from './library.mjs';
 import {LIMBS,wrap,ensureMiddleJoints,resizeSprite,validLimb,solveEndpoint,bendFromDrag} from './rig-edit.mjs';
 import {mountSheetImporter} from './sheet-import.mjs';
 import {applyResourceChanges} from './resource-tools.mjs';
+import {mountOutfitFit} from './outfit-fit-ui.mjs';
+import {drawHeightGuides} from './outfit-fit.mjs';
 import {blankClip,appendInheritedFrame,copyPoseToFrames} from './timeline.mjs';
 import {mountTimelineTools} from './timeline-ui.mjs';
 import {mountAccessories} from './accessory-ui.mjs';
@@ -24,6 +26,9 @@ const state={project:null,pose:null,time:0,attachmentTime:0,key:0,playing:false,
 let catalog, drawError=false, jointPositions={},anchorRect;
 const ctx=$('stage').getContext('2d'), ac=$('anchor').getContext('2d');
 $('upload').insertAdjacentHTML('afterend','<label><input id="autoSlice" type="checkbox" checked> Tự cắt các mảnh rời khi tải ảnh</label><button id="resources">▦ Tài nguyên đã cắt (0)</button>');
+const outfitFit=mountOutfitFit({catalog:()=>catalog,project:()=>state.project,image:src=>image(src)});
+document.querySelector('.viewbar>div').insertAdjacentHTML('afterbegin','<label title="Thước ngang theo đơn vị rig, mốc 0 tại mặt đất. Chỉ hiển thị, không xuất vào game."><input id="heightGuides" type="checkbox" autocomplete="off"> Thước ngang</label>');
+$('heightGuides').checked=false;
 $('anchor').insertAdjacentHTML('afterend','<label>Lấn vào thân (vai / hông)<input id="overlap" type="number" min="0" max="40" step="0.5" value="0"></label><p class="joint-info">Kéo vòng khuỷu/gối để gập. Trong ảnh bên dưới, có thể chỉnh cả elbow/knee. Đổi kích thước sẽ giữ tỷ lệ các khớp.</p>');
 $('anchor').insertAdjacentHTML('beforebegin','<label id="anchorPartPicker">Bộ phận cần chỉnh neo<select id="anchorPart"></select></label>');
 $('existing').closest('label').insertAdjacentHTML('afterend','<p class="hint" id="existingClipInfo" role="status"></p><label><input id="playLoadedClip" type="checkbox" checked> Phát ngay sau khi nạp clip</label>');
@@ -57,7 +62,7 @@ function selectKey(i){pausePlayback();state.key=i;state.time=state.project.clip.
 function renderMeta(){const c=state.project.clip;$('clipName').value=c.name;$('kind').value=c.kind;$('duration').value=c.dur;$('hit').value=c.hit;renderKeys();renderPart();renderChannels();accessoryUI.refresh().catch(e=>status('Lỗi phụ kiện: '+e.message))}
 function renderPart(){const s=state.project.parts[state.part];$('part').value=state.part;$('anchorPart').value=state.part;$('sw').value=s.w;$('sh').value=s.h;$('overlap').value=s.overlap??0;$('overlap').disabled=!/^(arm|leg)/.test(state.part);options($('joint'),Object.keys(s.joints).map(k=>[k,k]));jointInputs();const re=new RegExp('_'+state.part+'(?:_v[0-9]+)?$');const candidates=Object.entries(catalog.sprites).filter(([n])=>re.test(n)).map(([n])=>[n,n]);options($('sprite'),[['','— Chọn ảnh thay thế —'],...candidates]);$('resources').textContent='▦ Tài nguyên đã cắt ('+(state.project.resources?.length||0)+')';}
 function jointInputs(){const j=state.project.parts[state.part].joints[$('joint').value];if(j){$('jx').value=j[0];$('jy').value=j[1]}}
-async function adopt(p){validate(p);state.project=structuredClone(p);state.playing=false;state.key=0;state.time=0;await syncRig();const defaults=NC.Anim.setup(animationContext(0));for(const key of state.project.clip.keys)key.P={...defaults,...key.P};setPose();renderMeta();persist()}
+async function adopt(p){validate(p);state.project=structuredClone(p);outfitFit.refresh(p.rig);state.playing=false;state.key=0;state.time=0;await syncRig();const defaults=NC.Anim.setup(animationContext(0));for(const key of state.project.clip.keys)key.P={...defaults,...key.P};setPose();renderMeta();persist()}
 async function loadRig(name){checkpoint();const p=structuredClone(state.project);p.rig=name;p.parts=Object.fromEntries(PARTS.map(part=>[part,structuredClone(catalog.sprites[`rig_${name}_${part}`])]));await adopt(p)}
 function record(){checkpoint();const c=state.project.clip;const t=Math.round(state.time*1000)/1000;const key={t,curve:$('curve').value,P:structuredClone(state.pose)};const i=c.keys.findIndex(k=>Math.abs(k.t-t)<.001);if(i>=0)c.keys[i]=key;else c.keys.push(key);c.keys.sort((a,b)=>a.t-b.t);state.key=c.keys.indexOf(key);renderKeys();persist()}
 function download(name,content,type='application/json'){const a=document.createElement('a');const url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000)}
@@ -113,10 +118,25 @@ event('loadClip','click',()=>{
 });
 event('save','click',async()=>{validate(state.project);const p=await portableProject();download(p.rig+'.cutout.json',JSON.stringify(p,null,2));status('Đã lưu project kèm ảnh, phụ kiện và rig cánh; mở lại không cần kho ảnh GitHub.')});
 event('open','click',()=>$('projectFile').click());event('projectFile','change',async()=>{const f=$('projectFile').files[0];if(!f)return;if(f.size>30*1024*1024)throw Error('Project tối đa 30 MB');const p=validate(JSON.parse(await f.text()));checkpoint();await adopt(p);$('projectFile').value=''});
-const sheetImporter=mountSheetImporter({store:async(resources,assignments,updates=[])=>{const p=applyResourceChanges(state.project,resources,assignments,updates);validate(p);checkpoint();state.project=p;await syncRig();renderPart();persist();status('Đã lưu vai trò tài nguyên và gán '+Object.keys(assignments).length+' bộ phận. Chỉnh kích thước/điểm neo nếu cần.')}});
+const sheetImporter=mountSheetImporter({onOpen:dialog=>outfitFit.open(dialog),store:async(resources,assignments,updates=[])=>{const result=await outfitFit.apply(applyResourceChanges(state.project,resources,assignments,updates),assignments),p=result.project;validate(p);checkpoint();state.project=p;await syncRig();renderPart();persist();status('Đã lưu vai trò tài nguyên và gán '+Object.keys(assignments).length+' bộ phận.'+(result.fitted?' Tự căn '+result.fitted+' bộ phận theo '+result.reference+'; giữ tỷ lệ ảnh.':' Giữ kích thước hiện tại.'))}});
 event('resources','click',()=>sheetImporter.gallery(state.project.resources));
 $('imageFile').accept='image/png,image/webp,image/jpeg';$('upload').textContent='＋ Thêm ảnh PNG / WebP / JPG';
-event('upload','click',()=>$('imageFile').click());event('imageFile','change',async()=>{const f=$('imageFile').files[0];if(!f)return;try{if(!['image/png','image/webp','image/jpeg'].includes(f.type)||f.size>8*1024*1024)throw Error('Chọn ảnh PNG/WebP/JPG tối đa 8 MB');let src=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f)});const img=await image(src);if($('autoSlice').checked)await sheetImporter.open(img);else{if(f.type==='image/jpeg'){const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);src=c.toDataURL('image/png')}checkpoint();state.project.parts[state.part].src=src;await syncRig();persist();status('Đã thay ảnh bộ phận đang chọn.')}}finally{$('imageFile').value=''}});
+event('upload','click',()=>$('imageFile').click());event('imageFile','change',async()=>{
+ const f=$('imageFile').files[0];if(!f)return;
+ try{
+  if(!['image/png','image/webp','image/jpeg'].includes(f.type)||f.size>8*1024*1024)throw Error('Chọn ảnh PNG/WebP/JPG tối đa 8 MB');
+  let src=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f)});
+  const img=await image(src);
+  if($('autoSlice').checked)await sheetImporter.open(img);
+  else{
+   if(f.type==='image/jpeg'){const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);src=c.toDataURL('image/png')}
+   const assignments={[state.part]:{src}},candidate=applyResourceChanges(state.project,[],assignments);
+   const result=await outfitFit.apply(candidate,assignments);validate(result.project);
+   checkpoint();state.project=result.project;await syncRig();renderPart();persist();
+   status('Đã thay ảnh bộ phận đang chọn.'+(result.fitted?' Tự căn theo '+result.reference+'; giữ tỷ lệ ảnh.':''));
+  }
+ }finally{$('imageFile').value=''}
+});
 event('export','click',async()=>{const p=await portableProject();const e=gameExport(p);const bundle={format:'nightcamp-cutout-export-v1',...e,project:p};download(e.rig+'.game-bundle.json',JSON.stringify(bundle,null,2));status('Đã xuất bundle kèm đủ ảnh. Có thể thử trực tiếp trong Cutout Playground.')});
 for(const [id,from,to] of [['undo','undo','redo'],['redo','redo','undo']])event(id,'click',async()=>{if(!state[from].length)return;state[to].push(JSON.stringify(state.project));await adopt(JSON.parse(state[from].pop()))});
 event('zoom','input',()=>state.zoom=+$('zoom').value);event('flip','change',()=>state.face=$('flip').checked?-1:1);
@@ -140,7 +160,9 @@ function render(){
  if(canvas.width!==Math.round(r.width*dpr)||canvas.height!==Math.round(r.height*dpr)){canvas.width=Math.round(r.width*dpr);canvas.height=Math.round(r.height*dpr)}
  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,r.width,r.height);const x=r.width/2,y=r.height*.78;
  ctx.strokeStyle='#344253';ctx.lineWidth=1;for(let gx=x%40;gx<r.width;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,r.height);ctx.stroke()}
- ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(r.width,y);ctx.stroke();if(!state.rig||drawError)return;
+ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(r.width,y);ctx.stroke();
+ if($('heightGuides').checked)drawHeightGuides(ctx,r.width,r.height,y,previewScale(r)*.87);
+ if(!state.rig||drawError)return;
  try{const P={...state.pose,face:state.face,attachmentTime:state.attachmentTime},scale=previewScale(r);NC.drawRig(ctx,state.rig,state.equip,P,x,y,{scale,noWeapon:true});jointPositions=NC.rigJoints(state.equip,P,x,y,scale);
   if($('bones').checked){ctx.strokeStyle='#d3ed9299';ctx.lineWidth=1.5;for(const chain of chains){ctx.beginPath();chain.forEach((key,i)=>ctx[i?'lineTo':'moveTo'](...jointPositions[key]));ctx.stroke()}
    for(const [name,p] of Object.entries(jointPositions)){if(name==='wHand'||name==='wTip')continue;ctx.fillStyle='#d3ed92';ctx.beginPath();ctx.arc(...p,3.5,0,7);ctx.fill()}
@@ -152,6 +174,7 @@ let last=0;function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;if
 async function reloadSource(){
   status('Đang đọc thư viện…');
   const next=await connectSource();source=next;catalog=next.catalog;NC.POSE_LIB=next.poses;state.images.clear();
+  outfitFit.refresh();
   accessoryUI.setCatalog(next.accessories);
   options($('rig'),catalog.rigs.map(n=>[n,n]));
   options($('existing'),Object.entries(NC.POSE_LIB||{}).map(([id,c])=>[id,c.name+' · '+poseClipDescription(c)]));describeExistingClip();

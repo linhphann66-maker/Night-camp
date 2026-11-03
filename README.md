@@ -107,10 +107,26 @@ Sửa thao tác rig và nhập ảnh tách mảnh:
   Trong thư viện có checkbox chọn nhiều mảnh và **Gán các mảnh đã chọn**;
   gán một mảnh không đóng thư viện. Mặc định chọn bản mới nhất cho mỗi bộ
   phận; các lựa chọn trùng đích được báo lỗi, không ghi đè âm thầm. Gán hàng
-  loạt là một bước Hoàn tác, không đổi kích thước/khớp hay animation hiện có.
+  loạt là một bước Hoàn tác và giữ nguyên animation hiện có.
   Không tự suy đoán giải phẫu hoặc tách phần còn dính nhau; phần trắng nối
   thẳng ra nền vẫn có thể cần chỉnh ngưỡng/chuẩn bị nền trong suốt. Mảnh đã
   khoét mất chi tiết ở bản cũ phải cắt lại từ ảnh gốc, không tự phục hồi.
+- **Tự căn trang phục** mặc định bật khi tải ảnh riêng hoặc gán các mảnh đã
+  tách. Chọn **Bộ chuẩn** (traveler, silas...) trong mục Nhân vật hoặc ngay
+  hộp tách ảnh/tài nguyên. Studio đo phần ảnh có nét, bỏ viền trong suốt, giữ
+  tỷ lệ ảnh và căn chiều cao đầu / chiều dài chuỗi xương thân, tay, chân theo
+  dữ liệu gốc của bộ chuẩn; các khớp được chuyển sang tọa độ ảnh mới cùng lúc.
+  Không dựa vào bộ đã chỉnh để tránh phóng/thu cộng dồn. Chỉ các phần đang gán
+  được căn; lưu tài nguyên không gán, mở project cũ hay đổi trang phục có sẵn
+  không tự sửa kích thước. Tắt tùy chọn để giữ kích thước/khớp đang có. Đây là
+  căn theo tỷ lệ chuẩn, không nhận diện giải phẫu: ảnh khác dáng/vị trí khớp
+  nhiều vẫn cần chỉnh neo. Kết quả được lưu thẳng trong project/game bundle,
+  không cần thay bộ phát và không giảm chất lượng pixel của ảnh.
+- **Thước ngang** trên preview mặc định tắt mỗi lần mở Studio. Bật để thấy
+  các vạch ngang mờ và độ cao theo đơn vị rig, mốc 0 ở mặt đất (không phải cm).
+  Vạch theo đúng zoom, không chạy theo đầu hoặc theo trang phục; dừng cùng
+  một pose để so chiều cao giữa các bộ. Đây chỉ là lớp hỗ trợ chỉnh sửa,
+  không lưu vào project hay xuất sang game.
 - Bộ renderer riêng được tạo bởi `node tools/build-cutout-runtime.mjs`; dùng
   cùng renderer cho Studio và demo. Công cụ giải nén bundle kèm runtime này để
   các khớp và độ chồng mép được giữ khi tích hợp vào game khác.

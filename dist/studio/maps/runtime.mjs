@@ -1,12 +1,14 @@
 // Portable map v1: data-only terrain, anchored props, foot collisions and water
 // crossings. No Night Camp client globals, network, combat or server required.
+import {NATIVE_GROUNDS,NATIVE_MAPS,NATIVE_GROUND_BUILD} from './native-ground.mjs';
+export {NATIVE_GROUNDS,NATIVE_MAPS,NATIVE_GROUND_BUILD};
 export const TERRAINS={grass:{name:'Cỏ',color:'#76aa5e'},dirt:{name:'Đất / đường',color:'#cdaa76'},stone:{name:'Đá lát',color:'#92929a'},sand:{name:'Cát',color:'#dcc08c'},water:{name:'Nước',color:'#5caccf'},moss:{name:'Rêu / cỏ tối',color:'#567e64'}};
 export const MAP_RUNTIME_VERSION=2;
 const safeId=id=>typeof id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(id)&&!['__proto__','constructor','prototype'].includes(id);
 const finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
 export const DEFAULT_LIGHTING=Object.freeze({mode:'day',hour:22,ambient:1,vignette:true,playerLight:true,blend:true,details:true});
 export function lightingSettings(p){return {...DEFAULT_LIGHTING,...p.lighting}}
-export function nightness(p){const l=lightingSettings(p),h=l.hour;return l.mode==='night'?1:l.mode==='day'?0:h<5||h>=19.5?1:h<7?(7-h)/2:h>=17.5?(h-17.5)/2:0}
+export function nightness(p){const l=lightingSettings(p),h=l.hour,n=l.mode==='night'?1:l.mode==='day'?0:h<5||h>=19.5?1:h<7?(7-h)/2:h>=17.5?(h-17.5)/2:0,m=p.environment?.nativeLighting&&NATIVE_MAPS[p.environment.map];return Math.max(n,m?.dusk||0)}
 const fail=msg=>{throw Error(msg)};
 const validSrc=src=>typeof src==='string'&&(/^assets\/[\w./-]+\.(png|webp|jpg|jpeg)$/.test(src)&&!src.split('/').includes('..')||/^data:image\/(png|webp);base64,[A-Za-z0-9+/=]+$/.test(src));
 function shape(s){return s===null||!!s&&['rect','ellipse'].includes(s.type)&&finite(s.x,-4096,4096)&&finite(s.y,-4096,4096)&&finite(s.w,1,4096)&&finite(s.h,1,4096)}
@@ -14,6 +16,7 @@ export function validateMap(p){
  if(p?.format!=='darkin-map-v1'||!safeId(p.id)||typeof p.name!=='string'||!p.name.trim()||p.name.length>100)fail('Không đúng project map Darkin v1 / tên map không hợp lệ');
  if(!Number.isInteger(p.cols)||!finite(p.cols,4,128)||!Number.isInteger(p.rows)||!finite(p.rows,4,128)||![32,64,128].includes(p.cell)||!Number.isInteger(p.seed)||!finite(p.seed,0,2147483647))fail('Map tối đa 128×128 ô, cỡ ô 32/64/128');
  if(p.lighting!==undefined){const l=p.lighting;if(!l||typeof l!=='object'||Array.isArray(l)||Object.keys(l).some(k=>!Object.hasOwn(DEFAULT_LIGHTING,k)))fail('Thiết lập ánh sáng không hợp lệ');const v=lightingSettings(p);if(!['day','night','time'].includes(v.mode)||!finite(v.hour,0,23.99)||!finite(v.ambient,0,1)||['vignette','playerLight','blend','details'].some(k=>typeof v[k]!=='boolean'))fail('Giờ / cường độ ánh sáng không hợp lệ')}
+ if(p.environment!==undefined&&(!p.environment||Array.isArray(p.environment)||!Object.hasOwn(NATIVE_MAPS,p.environment.map)||typeof p.environment.nativeLighting!=='boolean'))fail('Bảng màu / ánh sáng map nguồn không hợp lệ');
  if(!p.assets||Array.isArray(p.assets)||Object.keys(p.assets).length>1000)fail('Danh mục tài nguyên map không hợp lệ');
  for(const [id,s]of Object.entries(p.assets))if(!safeId(id)||!s||!validSrc(s.src)||!finite(s.w,1,4096)||!finite(s.h,1,4096)||!finite(s.ax,0,1)||!finite(s.ay,0,1)||!['tree','rock','bush','low','bridge','custom','ground'].includes(s.kind)||!shape(s.collider??null)||!shape(s.walk??null))fail('Tài nguyên không hợp lệ: '+id);
  for(const s of Object.values(p.assets))if(['fadeBehind','groundShadow'].some(k=>s[k]!==undefined&&typeof s[k]!=='boolean')||s.grounding!==undefined&&!['image','anchor'].includes(s.grounding))fail('Thiết lập che nhân vật / chạm đất không hợp lệ');
@@ -31,7 +34,8 @@ export function createMap({id='custom_map',name='Map mới',cols=32,rows=24,cell
 export function resizedMap(project,cols,rows,cell=project.cell){
  const p=structuredClone(project);p.cols=cols;p.rows=rows;p.cell=cell;
  if(!Number.isInteger(cols)||!Number.isInteger(rows)||!finite(cols,4,128)||!finite(rows,4,128))fail('Map từ 4 đến 128 ô mỗi chiều');
- for(const key of ['terrain','blocked','walkable']){p[key]=Array(cols*rows).fill(key==='terrain'?'grass':0);for(let y=0;y<Math.min(rows,project.rows);y++)for(let x=0;x<Math.min(cols,project.cols);x++)p[key][y*cols+x]=project[key][y*project.cols+x]}
+ const m=NATIVE_MAPS[project.environment?.map],fill=m?nativeTerrainId(m.biome,NATIVE_GROUNDS[m.biome].kind==='dungeon'?'floor':'base'):'grass';
+ for(const key of ['terrain','blocked','walkable']){p[key]=Array(cols*rows).fill(key==='terrain'?fill:0);for(let y=0;y<Math.min(rows,project.rows);y++)for(let x=0;x<Math.min(cols,project.cols);x++)p[key][y*cols+x]=project[key][y*project.cols+x]}
  return validateMap(p); // Never silently remove props, spawn or warps beyond a shrinking edge.
 }
 export function cellIndex(p,x,y){return x<0||y<0||x>=p.cols*p.cell||y>=p.rows*p.cell?-1:Math.floor(y/p.cell)*p.cols+Math.floor(x/p.cell)}
@@ -74,7 +78,7 @@ export function reanchorAsset(p,id,ax,ay){
 export function pointWalkable(p,x,y){
  const i=cellIndex(p,x,y);if(i<0||p.blocked[i])return false;
  let onBridge=false;for(const o of p.objects){const [lx,ly]=objectLocal(o,x,y);if(insideShape(o.collider,lx,ly))return false;if(insideShape(o.walk,lx,ly))onBridge=true}
- return p.terrain[i]!=='water'||p.walkable[i]===1||onBridge;
+ return !(p.terrain[i]==='water'||TERRAINS[p.terrain[i]]?.water)||p.walkable[i]===1||onBridge;
 }
 export function canWalk(p,x,y,r=12){if(!pointWalkable(p,x,y))return false;for(let i=0;i<8;i++)if(!pointWalkable(p,x+Math.cos(i*Math.PI/4)*r,y+Math.sin(i*Math.PI/4)*r*.6))return false;return true}
 export function moveActor(p,actor,dx,dy,dt,speed=180){const len=Math.max(1,Math.hypot(dx,dy)),x=dx/len*speed*Math.max(0,Math.min(.1,dt)),y=dy/len*speed*Math.max(0,Math.min(.1,dt)),n=Math.max(1,Math.ceil(Math.hypot(x,y)/5));for(let i=0;i<n;i++){if(canWalk(p,actor.x+x/n,actor.y,actor.radius??12))actor.x+=x/n;if(canWalk(p,actor.x,actor.y+y/n,actor.radius??12))actor.y+=y/n}return actor}
@@ -97,7 +101,39 @@ function noise(x,y,s){const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,u=
 // Stone spacing/seams: world.js. Sand/moss are editor adaptations.
 const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t),clamp=v=>Math.max(0,Math.min(1,v));
 const PALETTES={grass:[[118,170,94],[50,76,74]],dirt:[[205,170,118],[64,70,82]],sand:[[220,192,140],[66,74,86]],water:[[92,172,216],[38,62,104]],moss:[[86,126,100],[38,60,62]]};
+export const NATIVE_TERRAINS={};
+export function nativeTerrainId(biome,channel='base'){return 'nc_'+biome+'__'+channel}
+const channelNames={base:'Nền chính',road:'Đường đất',roadEdge:'Mép đường',roadMid:'Giữa đường',water:'Nước',deep:'Nước sâu',shore:'Cát / bờ hồ',soil:'Đất trồng',soilEdge:'Mép đất trồng',furrow:'Rãnh đất',ridge:'Luống đất',mesaTop:'Mặt cao nguyên',mesaRim:'Viền cao nguyên',mesaFace:'Vách đá',mesaFace2:'Vách đá tối',floor:'Sàn hang',floor2:'Sàn sáng',rock:'Đá khối',rock2:'Đá sáng',pool:'Hồ ngầm / dung nham',clearing:'Cỏ bãi trống',ash:'Tro lửa'};
+for(const [biome,b]of Object.entries(NATIVE_GROUNDS))for(const channel of b.kind==='camp'?['base','clearing','road','ash']:Object.keys(channelNames).filter(k=>b[k]&&k!=='clearing'&&k!=='ash')){const id=nativeTerrainId(biome,channel),entry={biome,channel,name:channelNames[channel]};NATIVE_TERRAINS[id]=entry;TERRAINS[id]={name:entry.name,color:'#566b65',native:entry,water:['water','deep','pool'].includes(channel)}}
+function sourceNoise(x,y,s){const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy),a=hash(ix,iy,s),b=hash(ix+1,iy,s),c=hash(ix,iy+1,s),d=hash(ix+1,iy+1,s);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
+function sourceFbm(x,y,s,oct){let sum=0,amp=.5,f=1,norm=0;for(let i=0;i<oct;i++){sum+=amp*sourceNoise(x*f,y*f,s+i*31);norm+=amp;amp*=.5;f*=2}return sum/norm}
+const bytes=rgb=>Array.from(new Uint8ClampedArray(rgb));
+export function nativeGroundRGB(biome,channel,x,y,seed,n=0){
+ const b=NATIVE_GROUNDS[biome];if(!b)throw Error('Không có bảng màu gốc '+biome);let day,night;
+ if(b.kind==='field'){
+  if(channel==='base'){const t=clamp((sourceFbm(x/b.patchScale,y/b.patchScale,seed+3,2)-.44)/.18),v=(sourceNoise(x/64,y/64,seed+9)-.5)*b.vary;night=b.base.n.map((c,i)=>c+(b.patch.n[i]-c)*t+v*(i===2?.8:1));day=b.base.d.map((c,i)=>c+(b.patch.d[i]-c)*t+v*(i===2?1:1.3))}
+  else{const c=b[channel];if(!c?.d||!c?.n)throw Error('Không có màu nền '+channel);day=c.d;night=c.n}
+ }else if(b.kind==='dungeon'){
+  const S=seed*5+3;if(channel==='floor'){const t=clamp((sourceFbm(x/420,y/420,S+1,2)-.42)/.2),v=(sourceFbm(x/60,y/60,S+2,2)-.5)*18;day=night=mix(b.floor,b.floor2,t).map(c=>c+v)}
+  else if(channel==='pool'){const t=clamp(sourceNoise(x/60,y/60,S+9)*1.4-.2);day=night=mix(b.pool.c2,b.pool.c1,t)}
+  else day=night=b[channel];
+ }else{
+  const v=(sourceFbm(x/320,y/320,5,3)-.5)*22+(sourceNoise(x/58,y/58,8)-.5)*8;
+  const e=Math.min(...b.CORNERS.map(c=>((x-c.x)/c.rx)**2+((y-c.y)/c.ry)**2)),open=channel==='clearing'?.75:clamp(1.15-Math.sqrt(e)*.55)*.75;
+  day=[88+v*1.3+open*22,132+v*1.4+open*22,80+v+open*8];night=[46+v+open*8,64+v+open*10,78+v*.9+open*4];
+  if(channel==='road'){const w=sourceNoise(x/36,y/36,12)*10;night=[64+w*.5,66+w*.4,80+w*.3];day=[184+w,154+w,110+w*.6]}if(channel==='ash'){night=[52,48,60];day=[122,104,86]}
+ }
+ // Original ground is written to Uint8ClampedArray BEFORE day/night blending.
+ return bytes(mix(bytes(day),bytes(night),clamp(n)));
+}
+for(const [id,{biome,channel}]of Object.entries(NATIVE_TERRAINS))TERRAINS[id].color=`rgb(${nativeGroundRGB(biome,channel,100,100,7,0).join(',')})`;
+export function nativeRoadMaterial(p,material){const m=NATIVE_MAPS[p.environment?.map];if(!m||material==='stone')return material;const b=NATIVE_GROUNDS[m.biome],channel=b.kind==='dungeon'?'floor':material==='sand'&&b.shore?'shore':'road';return Object.hasOwn(NATIVE_TERRAINS,nativeTerrainId(m.biome,channel))?nativeTerrainId(m.biome,channel):material}
+export function applyNativeEnvironment(project,mapId,{nativeLighting=true,useSeed=true}={}){
+ const m=NATIVE_MAPS[mapId];if(!m)throw Error('Không tìm thấy map nguồn');const p=structuredClone(project),b=NATIVE_GROUNDS[m.biome],base=b.kind==='dungeon'?'floor':'base',alias={grass:base,moss:base,dirt:b.kind==='dungeon'?'floor':'road',sand:b.shore?'shore':base,water:b.water?'water':b.pool?'pool':null};
+ p.terrain=p.terrain.map(id=>{const channel=NATIVE_TERRAINS[id]?.channel||alias[id],target=channel&&nativeTerrainId(m.biome,channel);return target&&Object.hasOwn(NATIVE_TERRAINS,target)?target:id});p.environment={map:mapId,nativeLighting};if(useSeed)p.seed=m.seed;return validateMap(p);
+}
 export function terrainRGB(type,x,y,seed,n=0){
+ if(NATIVE_TERRAINS[type]){const {biome,channel}=NATIVE_TERRAINS[type];return nativeGroundRGB(biome,channel,x,y,seed,n)}
  n=clamp(n);let day,night;
  if(type==='stone'){const fx=x/150-Math.floor(x/150),fy=y/105-Math.floor(y/105),v=hash(Math.floor(x/150),Math.floor(y/105),seed)*10+noise(x/60,y/60,seed+1)*6;day=fx<.035||fy<.05?[96,96,108]:[128+2*v,128+2*v,138+2*v];night=fx<.035||fy<.05?[41,44,58]:[47+v,51+v,68+v]}
  else{const palette=PALETTES[type]||PALETTES.grass;[day,night]=palette;
@@ -121,11 +157,11 @@ export function groundRGB(p,type,x,y,n=nightness(p)){
  for(const [dx,dy,d]of [[-1,0,fx],[1,0,cs-fx],[0,-1,fy],[0,1,cs-fy]]){if(d>=edge||gx+dx<0||gy+dy<0||gx+dx>=p.cols||gy+dy>=p.rows)continue;const other=p.terrain[(gy+dy)*p.cols+gx+dx];if(other===type||!['grass','moss','dirt','sand'].includes(other))continue;const t=clamp(1-d/edge);rgb=mix(rgb,terrainRGB(other,x,y,p.seed,n),.5*t*t*(3-2*t))}return rgb.map(Math.round);
 }
 // Original skyAmbient's warm dawn/dusk, with a user-controlled tint strength.
-export function ambientRGB(p){const l=lightingSettings(p),n=nightness(p),warm=l.hour>12?[255,164,108]:[255,184,196],k=l.mode==='time'?Math.sin(Math.PI*n)*(l.hour>12?.6:.45):0;return mix([255,255,255],mix(mix([255,255,255],[172,186,232],n),warm,k),l.ambient).map(Math.round)}
+export function ambientRGB(p){const l=lightingSettings(p),n=nightness(p),m=p.environment?.nativeLighting&&NATIVE_MAPS[p.environment.map];if(m){const h=l.mode==='time'?l.hour:l.mode==='day'?12:22,warm=h>12?[255,164,108]:[255,184,196],k=Math.sin(Math.PI*n)*(h>12?.6:.45),sky=mix(mix([255,255,255],[172,186,232],n),warm,k).map(Math.round),target=m.ambient||sky.map((c,i)=>Math.min(255,Math.round(c*(1-m.tint[i]*n))+m.add[i]*n));return mix([255,255,255],target,l.ambient)}const warm=l.hour>12?[255,164,108]:[255,184,196],k=l.mode==='time'?Math.sin(Math.PI*n)*(l.hour>12?.6:.45):0;return mix([255,255,255],mix(mix([255,255,255],[172,186,232],n),warm,k),l.ambient).map(Math.round)}
 export class MapRenderer{
  constructor(project,images=new Map()){this.project=project;this.images=images;this.cache=new Map()}
  drawGroundShadows(ctx,objects,visible){for(const o of objects){const s=this.project.assets[o.asset];if(s.kind==='ground'||!(s.groundShadow??!!s.user)||!visible(objectBounds(this.project,o)))continue;const g=imageGeometry(this.images.get(o.asset));if(!g)continue;const f=objectGroundPoint(this.project,o,g),w=(g.bounds.x1-g.bounds.x0)*s.w*o.scale,rx=Math.max(3,w*.2),ry=Math.max(1.5,rx*.23);ctx.save();ctx.translate(f.x,f.y);ctx.scale(rx,ry);const gradient=ctx.createRadialGradient(0,0,0,0,0,1);gradient.addColorStop(0,'rgba(8,17,20,.3)');gradient.addColorStop(1,'rgba(8,17,20,0)');ctx.fillStyle=gradient;ctx.fillRect(-1,-1,2,2);ctx.restore()}}
- roadTexture(ctx,material){const p=this.project,key=[material,p.seed,nightness(p)].join(':');this.roadTextures||=new Map();if(this.roadTextures.has(key))return this.roadTextures.get(key);const c=document.createElement('canvas');c.width=300;c.height=210;const cc=c.getContext('2d'),data=cc.createImageData(c.width,c.height),n=nightness(p);for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)data.data.set([...roadTextureRGB(material,x,y,p.seed,n),255],(y*c.width+x)*4);cc.putImageData(data,0,0);const pattern=ctx.createPattern(c,'repeat');this.roadTextures.set(key,pattern);if(this.roadTextures.size>12)this.roadTextures.delete(this.roadTextures.keys().next().value);return pattern}
+ roadTexture(ctx,material){const p=this.project,type=nativeRoadMaterial(p,material),key=[type,p.seed,nightness(p)].join(':');this.roadTextures||=new Map();if(this.roadTextures.has(key))return this.roadTextures.get(key);const c=document.createElement('canvas');c.width=300;c.height=210;const cc=c.getContext('2d'),data=cc.createImageData(c.width,c.height),n=nightness(p);for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)data.data.set([...roadTextureRGB(type,x,y,p.seed,n),255],(y*c.width+x)*4);cc.putImageData(data,0,0);const pattern=ctx.createPattern(c,'repeat');this.roadTextures.set(key,pattern);if(this.roadTextures.size>12)this.roadTextures.delete(this.roadTextures.keys().next().value);return pattern}
  drawRoads(ctx,{x,y,zoom,width,height}){
   const p=this.project,roads=[...(p.roads||[]),...(this.previewRoad?[this.previewRoad]:[])];if(!roads.length)return;ctx.save();ctx.beginPath();ctx.rect(0,0,p.cols*p.cell,p.rows*p.cell);ctx.clip();ctx.lineCap=ctx.lineJoin='round';
   for(const r of roads){const b=roadGeometry(r).bounds;if(!b||b.x1<x||b.y1<y||b.x0>x+width/zoom||b.y0>y+height/zoom)continue;traceRoad(ctx,r);ctx.strokeStyle=this.roadTexture(ctx,r.material)||`rgb(${terrainRGB(r.material,0,0,p.seed,nightness(p)).join(',')})`;const inner=Math.max(2,r.width*(1-r.softness));if(r.softness>0)for(let i=0;i<8;i++){ctx.globalAlpha=1/(10-i);ctx.lineWidth=r.width-(r.width-inner)*i/8;ctx.stroke()}ctx.globalAlpha=1;ctx.lineWidth=inner;ctx.stroke()}

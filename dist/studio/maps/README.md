@@ -18,6 +18,47 @@ Bảng nền dùng palette cỏ/đất/rêu/nước của `fieldgen.js` và các
 giao diện cọ là bản thích nghi cho editor, không tuyên bố tái tạo nguyên pixel,
 autotile hay shader nước của client gốc. Giữ seed để nền ổn định.
 
+## Bảng màu gốc theo map Night Camp
+
+Vào **☰ → Nền & cọ → Nền gốc Night Camp**. Có 156 mẫu theo map, gồm khu chính,
+khu phụ B và phụ bản, trích từ client `game-20261025-1758` trong repo. Có tìm
+theo tên Việt của khu chính, tên gốc hoặc ID; khu phụ giữ tên gốc để không đoán
+sai tên. Hai ảnh nhỏ cho xem trước ngày/đêm của mẫu đang chọn.
+
+- **Chọn màu để tô từng vùng:** các ô Nền chính, Đường đất, Bờ/cát, Nước, Nước
+  sâu, Đất trồng, Vách đá… chỉ hiện khi có màu tương ứng trong dữ liệu nguồn.
+  Có thể dùng màu từ nhiều map trong một bản đồ. Chọn màu chưa tự thay map.
+- **Áp dụng bảng màu & ánh sáng:** đổi nền thủ tục và các kênh màu có tương ứng,
+  giữ nguyên ảnh nền tải lên, vật thể, vị trí, tuyến đường cong, spawn, cửa và
+  vùng cản. Kênh không có trong bảng mới giữ nguyên, không đoán màu thay thế.
+  Có Hoàn tác/Làm lại. Ô mới khi mở rộng map dùng nền chính của mẫu hiện tại.
+- **Dùng seed gốc:** lấy seed của map nguồn để pha các mảng nền; bỏ chọn để
+  giữ seed đang dựng. Không dịch chuyển vị trí vật thể hoặc đường.
+- **Dùng sắc sáng / độ tối riêng:** giữ đúng tint và mức tối tối thiểu của map.
+  Nghĩa địa/rừng tối vẫn tối vào ban ngày; phụ bản luôn tối như dữ liệu gốc.
+  Áp dụng mẫu giữ giờ đang xem, đưa cường độ ánh sáng môi trường về 100%.
+  Tắt lựa chọn này để chỉ dùng màu vật liệu và ánh sáng Ngày/Đêm chung.
+
+Không lấy màu icon/minimap hay chọn màu gần giống bằng mắt. `native-ground.mjs`
+là dữ liệu sinh bằng `node tools/build-native-ground.mjs`: palette ngày/đêm,
+base/patch, độ biến thiên, tỉ lệ noise, màu đường/nước và ánh sáng riêng.
+Các phương trình được đối chiếu bằng kiểm thử với đoạn gốc `fieldgen.js`,
+`camp.js`, `dungeongen.js`; tint/độ tối được đối chiếu với các wrapper `fields*`.
+
+Đây là **màu và nền vật liệu**, không tự phục hồi bố cục, cây, đèn, sương, bóng
+vách, trang trí hay shader nước của cả map gốc. Màu sàn hang được lấy ở vùng
+sàn không có bóng vách, không tự tạo vách hay phòng. Độ phân giải preview và
+các ánh sáng cục bộ trong game vẫn có thể làm ảnh chụp khác nhau.
+
+Map cũ không tự đổi màu. Thiết lập nằm ở `project.environment` và các ID nền
+`nc_<biome>__<channel>`. Nước/nước sâu/hồ ngầm vẫn chặn di chuyển trừ khi có
+cầu hoặc lớp đường đi nước; màu đất/đá không tự tạo thêm vật cản.
+
+**Khi đưa sang game mới, tải lại `map-runtime.mjs` từ Studio.** File tải xuống
+đã gộp toàn bộ bảng màu và không có import phụ thuộc; HTML offline cũng đã
+nhúng đủ. Tên `DarkinMapPlayer` và format map không đổi. Nếu lấy trực tiếp mã
+nguồn thô trong repo thay vì bản tải xuống, phải mang cả `native-ground.mjs`.
+
 ## Ngày / đêm & ánh sáng
 
 Bấm **☀ Ngày / ☾ Đêm** ở đầu màn hình để đổi nhanh, hoặc mở **☰ → Ngày /

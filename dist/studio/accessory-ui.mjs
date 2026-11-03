@@ -1,5 +1,6 @@
 import {makeAttachment,validateAttachments} from './attachments.mjs';
-import {alphaBounds,imageRect,previewAnchor,fitGlasses,restoreShrunkGlassesSize} from './accessory-image.mjs';
+import {alphaBounds,imageRect,previewAnchor,fitGlasses} from './accessory-image.mjs';
+import {fitLibraryGlasses,glassesTemplePoint} from './glasses-fit.mjs';
 import {mountHeadFitting} from './head-fit-ui.mjs';
 import {resolveStockHat,restoreLibraryHat} from './stock-hats.mjs';
 const el=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e};
@@ -13,9 +14,9 @@ export function mountAccessories(actions){
  $('attachmentSocket').add(new Option('Lưng / cánh','back'));
  $('attachmentList').insertAdjacentHTML('afterend','<button id="editWingRig" hidden>✧ Thiết kế xương & animation cánh</button>');
  $('editWingRig').onclick=()=>document.getElementById('wingStudioButton').click();
- $('attachmentList').insertAdjacentHTML('afterend','<button id="restoreGlassesSizes">↶ Khôi phục cỡ kính bị thu nhỏ</button><p>Khôi phục hàng loạt kính còn đúng cỡ mặc định bị lỗi của bản trước. Bỏ qua cỡ đã chỉnh tay hoặc đổi tỷ lệ. Có thể Hoàn tác.</p>');
+ $('attachmentList').insertAdjacentHTML('afterend','<button id="restoreGlassesSizes" hidden>◎ Căn cỡ kính theo mắt & tai</button><p id="glassesSizeInfo" hidden>Cân đối tròng theo mắt; mẫu có mốc quai sẽ móc quai vào tai gần. Không lấy bề rộng tóc làm cỡ kính. Chỉ đặt lại kính đang chọn, có thể Hoàn tác. Ảnh kính riêng chưa có mốc tròng giữ nguyên cỡ đã chỉnh.</p>');
  $('attachmentList').insertAdjacentHTML('afterend','<button id="restoreLibraryHat" hidden>↶ Khôi phục cỡ & neo mũ thư viện</button><p id="restoreLibraryHatInfo" hidden>Chỉ đặt lại cỡ, tỷ lệ, góc và điểm neo của mũ đang chọn theo dữ liệu game gốc, thay các chỉnh tay của mũ đó. Kính / món khác giữ nguyên. Có thể Hoàn tác.</p>');
- $('attachmentPreview').insertAdjacentHTML('beforebegin','<button id="fitGlasses">◎ Căn kính vào mắt · giữ nguyên cỡ</button><p>Chọn loại Kính trước khi tải ảnh. Điểm neo trên kính sẽ trùng điểm gắn trên mặt; dùng Lệch X/Y hoặc bật kéo phụ kiện để căn thêm. Căn neo không đổi Rộng/Cao, Tỷ lệ hoặc Góc.</p>');
+ $('attachmentPreview').insertAdjacentHTML('beforebegin','<button id="fitGlasses">◎ Căn kính vào mắt · giữ nguyên cỡ</button><p id="fitGlassesInfo">Chọn loại Kính trước khi tải ảnh. Điểm neo trên kính sẽ trùng điểm gắn trên mặt; dùng Lệch X/Y hoặc bật kéo phụ kiện để căn thêm. Căn neo không đổi Rộng/Cao, Tỷ lệ hoặc Góc.</p>');
  $('attachmentPreview').insertAdjacentHTML('afterend','<p>Kéo dấu cộng lên cầu kính (giữa hai tròng). Ảnh mới được bỏ viền trong suốt tự động; ảnh đã lưu giữ nguyên dữ liệu.</p>');
  $('attachmentSocket').options[1].text='Mắt / cầu kính';
  const list=()=>actions.project()?.attachments||[];
@@ -26,17 +27,17 @@ export function mountAccessories(actions){
  function drawPreview(anchor=current()?.anchor){if(!previewImage||!anchor)return;const canvas=$('attachmentPreview'),ctx=canvas.getContext('2d'),{x,y,w,h}=previewRect;ctx.clearRect(0,0,250,190);ctx.drawImage(previewImage,x,y,w,h);ctx.strokeStyle='#e5f9a9';ctx.lineWidth=2;const px=x+anchor[0]*w,py=y+anchor[1]*h;ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.moveTo(px-10,py);ctx.lineTo(px+10,py);ctx.moveTo(px,py-10);ctx.lineTo(px,py+10);ctx.stroke()}
  async function mutate(fn){const items=structuredClone(list());fn(items);validateAttachments(items);await actions.set(items);await refresh()}
  function library(){const q=$('accessorySearch').value.trim().toLowerCase(),type=$('accessoryCategory').value;options($('accessoryCatalog'),catalog.filter(a=>a.category===type&&(a.name+' '+a.id).toLowerCase().includes(q)).map(a=>[a.id,a.id+' · '+a.name]));if(actions.project())hatFitting.refresh().catch(error=>actions.message(error.message))}
- async function refresh(){options($('attachmentList'),list().map(a=>[a.id,(a.visible===false?'○ ':'● ')+a.name]));if(!current())selected=list()[0]?.id||null;$('attachmentList').value=selected||'';const a=current();$('accessorySettings').hidden=!a;$('editWingRig').hidden=!a?.wingRig;const stockHat=a?.socket==='head'&&!a.wingRig&&catalog.some(e=>e.id===a.sourceId&&e.category==='hat');$('restoreLibraryHat').hidden=$('restoreLibraryHatInfo').hidden=!stockHat;if(!a){await hatFitting.refresh();return}
+ async function refresh(){options($('attachmentList'),list().map(a=>[a.id,(a.visible===false?'○ ':'● ')+a.name]));if(!current())selected=list()[0]?.id||null;$('attachmentList').value=selected||'';const a=current();$('accessorySettings').hidden=!a;$('editWingRig').hidden=!a?.wingRig;const stockHat=a?.socket==='head'&&!a.wingRig&&catalog.some(e=>e.id===a.sourceId&&e.category==='hat');$('restoreLibraryHat').hidden=$('restoreLibraryHatInfo').hidden=!stockHat;const stockGlasses=a&&!a.wingRig&&catalog.some(e=>e.id===a.sourceId&&e.category==='glasses'&&e.sprite.lens);$('restoreGlassesSizes').hidden=$('glassesSizeInfo').hidden=!stockGlasses;if(!a){await hatFitting.refresh();return}
   $('attachmentVisible').checked=a.visible!==false;$('attachmentSocket').value=a.socket;$('attachmentLayer').value=a.layer;
   const wing=!!a.wingRig;$('editWingRig').hidden=!wing;$('attachmentSocket').disabled=$('attachmentLayer').disabled=wing;
   for(const id of ['attachmentW','attachmentAX'])$(id).closest('.pair').hidden=wing;
-  $('attachmentPreview').hidden=$('fitGlasses').hidden=wing;
+  $('attachmentPreview').hidden=wing;$('fitGlasses').hidden=$('fitGlassesInfo').hidden=wing||!!stockGlasses;
   for(const [field,key]of [['X','x'],['Y','y'],['W','w'],['H','h'],['Scale','scale']])$('attachment'+field).value=Number(a[key].toFixed(3));
   $('attachmentRotation').value=Number((a.rotation*180/Math.PI).toFixed(2));$('attachmentAX').value=a.anchor[0];$('attachmentAY').value=a.anchor[1];
   previewRect=null;previewImage=null;const version=++previewVersion;if(wing){await hatFitting.refresh();return}const img=await actions.image(a.src);if(version!==previewVersion||current()?.id!==a.id)return;previewImage=img;previewRect=imageRect(img.naturalWidth,img.naturalHeight);drawPreview();await hatFitting.refresh();
  }
  $('accessorySearch').oninput=library;$('accessoryCategory').onchange=library;$('attachmentList').onchange=safe(async()=>{selected=$('attachmentList').value;await refresh()});
- $('addAccessory').onclick=safe(async()=>{if(!actions.project())return;const entry=catalog.find(a=>a.id===$('accessoryCatalog').value);if(!entry)throw Error('Chọn một món trong thư viện');const a=makeAttachment(entry,actions.headWidth());await actions.image(a.src);selected=a.id;await mutate(items=>items.push(a));actions.message('Đã gắn '+a.name+'. Có thể chỉnh điểm neo và độ lệch.')});
+ $('addAccessory').onclick=safe(async()=>{if(!actions.project())return;const entry=catalog.find(a=>a.id===$('accessoryCatalog').value);if(!entry)throw Error('Chọn một món trong thư viện');let a=makeAttachment(entry,actions.headWidth());if(entry.category==='glasses')a=fitLibraryGlasses(a,entry,actions.head(),actions.eyes?.());await actions.image(a.src);selected=a.id;await mutate(items=>items.push(a));actions.message('Đã gắn '+a.name+(entry.category==='glasses'?(glassesTemplePoint(entry)?' theo mắt và quai móc tai.':' theo hai mốc mắt.'):'. Có thể chỉnh điểm neo và độ lệch.'))});
  $('uploadAccessory').onclick=()=>$('accessoryFile').click();$('accessoryFile').onchange=safe(async()=>{
   const file=$('accessoryFile').files[0];if(!file)return;const project=actions.project(),category=$('accessoryCategory').value;
   try{if(!['image/png','image/webp'].includes(file.type)||file.size>8*1024*1024)throw Error('Ảnh PNG/WebP tối đa 8 MB');
@@ -53,7 +54,7 @@ export function mountAccessories(actions){
   await mutate(items=>{const i=items.findIndex(item=>item.id===a.id);if(i<0)throw Error('Mũ đang chọn vừa thay đổi');items[i]=restored});
   actions.message('Đã khôi phục cỡ và neo chuẩn của mũ thư viện; kính / món khác giữ nguyên. Có thể Hoàn tác.');
  });
- $('restoreGlassesSizes').onclick=safe(async()=>{const button=$('restoreGlassesSizes'),before=JSON.stringify(list()),items=structuredClone(list());let count=0;button.disabled=true;try{for(const a of items){const entry=catalog.find(e=>e.id===a.sourceId);if(entry?.category!=='glasses'&&!(a.socket==='face'&&a.src.startsWith('data:')))continue;const img=await actions.image(a.src),{bounds}=imageBounds(img);if(restoreShrunkGlassesSize(a,bounds,img.naturalWidth,img.naturalHeight,actions.headWidth(),entry?entry.sprite.h/entry.sprite.w:undefined))count++}if(JSON.stringify(list())!==before)throw Error('Phụ kiện vừa thay đổi. Hãy bấm khôi phục lại.');if(count){validateAttachments(items);await actions.set(items);await refresh()}actions.message(count?'Đã khôi phục cỡ cũ cho '+count+' kính; giữ nguyên neo và độ lệch. Có thể Hoàn tác.':'Không có kính còn khớp cỡ mặc định bị thu nhỏ. Giữ nguyên cỡ hiện tại.')}finally{button.disabled=false}});
+ $('restoreGlassesSizes').onclick=safe(async()=>{const a=current(),entry=catalog.find(e=>e.id===a?.sourceId&&e.category==='glasses');const fixed=fitLibraryGlasses(a,entry,actions.head(),actions.eyes?.());await mutate(items=>{const i=items.findIndex(item=>item.id===a.id);if(i<0)throw Error('Kính vừa thay đổi');items[i]=fixed});actions.message('Đã căn cỡ kính theo mắt'+(glassesTemplePoint(entry)?' và quai móc tai':'')+'; mũ, trang phục và món khác giữ nguyên. Có thể Hoàn tác.');});
  for(const [field,key]of [['X','x'],['Y','y'],['W','w'],['H','h'],['Scale','scale'],['Rotation','rotation']])$('attachment'+field).onchange=safe(()=>{const value=$('attachment'+field).valueAsNumber;return mutate(items=>{items.find(a=>a.id===selected)[key]=field==='Rotation'?value*Math.PI/180:value})});
  for(const [id,key]of [['attachmentSocket','socket'],['attachmentLayer','layer']])$(id).onchange=safe(()=>mutate(items=>items.find(a=>a.id===selected)[key]=$(id).value));
  $('attachmentVisible').onchange=safe(()=>mutate(items=>items.find(a=>a.id===selected).visible=$('attachmentVisible').checked));

@@ -6,6 +6,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {validate} from '../dist/studio/model.mjs';
+import {fitLibraryGlasses} from '../dist/studio/glasses-fit.mjs';
+import {makeAttachment} from '../dist/studio/attachments.mjs';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=fileURLToPath(new URL('../',import.meta.url)),base=process.argv[2];if(!base)throw Error('Cần URL Studio/');
 const entries=JSON.parse(await fs.readFile(path.join(root,'dist/studio/accessories.json'),'utf8'));
@@ -39,7 +41,7 @@ try{
  await page.locator('#bones').uncheck();await page.waitForTimeout(80);await page.screenshot({path:'/tmp/paladin-hat-after.png'});
  await value(page,'#accessoryCategory','glasses');await value(page,'#accessoryCatalog','glasses_round',null);await click(page,'#addAccessory');
  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('nightcamp.cutout.v1')).attachments?.length===2);
- p=await stored(page);const glasses=structuredClone(p.attachments[1]);near(glasses.w,hw*.85);
+ p=await stored(page);const glasses=structuredClone(p.attachments[1]),glassEntry=entries.find(e=>e.id==='glasses_round');near(glasses.w,fitLibraryGlasses(makeAttachment(glassEntry),glassEntry,p.parts.head).w);
  const old=structuredClone(p);Object.assign(old.attachments[0],{w:hw*1.63,h:hw*1.63*66/63,x:hw*-.29,y:hw*.477});
  await page.locator('#projectFile').setInputFiles({name:'old-hat-project.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(old))});
  await page.waitForFunction(w=>JSON.parse(localStorage.getItem('nightcamp.cutout.v1')).attachments[0].w===w,old.attachments[0].w);

@@ -180,10 +180,19 @@ Phụ kiện: chọn loại **Kính** trước khi tải ảnh để gắn đún
 được bỏ viền trong suốt; có thể kéo điểm neo trực tiếp tới cầu kính và xem ngay
 trên nhân vật. Nút **Căn kính vào mắt** sửa cả ảnh cũ còn viền trong suốt:
 đặt lại điểm gắn, neo giữa phần ảnh có nội dung và độ lệch; không thay đổi
-kích thước, tỷ lệ, góc hoặc ảnh gốc. Kính mới giữ cỡ mặc định cũ (0,85 lần
-bề rộng đầu). Nút **Khôi phục cỡ kính bị thu nhỏ** sửa hàng loạt kính còn
-khớp cỡ mặc định 0,45 của bản lỗi trước, bỏ qua cỡ đã chỉnh hoặc đổi tỷ lệ;
-có thể Hoàn tác. Với kính có trang trí lệch, chỉnh neo tới cầu kính rồi tinh chỉnh
+kích thước, tỷ lệ, góc hoặc ảnh gốc. **Kính thư viện mới** lấy hai tâm tròng / mắt
+trong `js/glasses.js` gốc làm nền tảng, không dùng hệ số 0,85 theo bề rộng tóc.
+Mẫu có mốc quai (đã căn trên PNG kính tròn) còn ghim đầu quai vào tai gần và
+cân đối hai tròng bằng phép fit đồng dạng, không bóp méo ảnh. Nhờ vậy kính
+tròn rộng khoảng 46 thay vì 61,8 của bản quá to hoặc 38,7 của bản chỉ bám mắt
+nhưng quai không tới tai. Mẫu chưa có mốc quai giữ phép căn hai mắt gốc.
+`sprite.temple=[u,v]` cho phép bổ sung mốc quai chuẩn hóa cho mẫu khác;
+`head.joints.earNear=[x,y]` có thể thay mốc tai đầu chuẩn khi làm đầu riêng.
+Với kính cũ, chọn kính → **Căn cỡ kính theo mắt & tai**;
+chỉ đặt lại kính đang chọn, có thể Hoàn tác.
+Nút khôi phục hàng loạt về cỡ 0,85 của bản cũ đã bỏ để không phóng lớn kính lại.
+Ảnh kính tải riêng chưa có hai mốc tròng không tự bị đoán cỡ/thu nhỏ; giữ cỡ đã
+chỉnh. Nút căn neo giữ nguyên cỡ vẫn dùng được cho ảnh riêng. Với kính có trang trí lệch, chỉnh neo tới cầu kính rồi tinh chỉnh
 Lệch X/Y. Project cũ không tự bị cắt ảnh hay ghi đè điểm neo đã chỉnh.
 
 **Tự căn mũ ôm đầu:** khi tải ảnh loại Mũ, có thể bật tự căn theo ba mốc ước

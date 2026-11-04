@@ -1,4 +1,5 @@
 import {validateAttachments} from './attachments.mjs';
+import {validateMountProject} from './mount-profiles.mjs';
 export const PARTS = ['head','torso','armF','armB','legF','legB'];
 export const CURVES = { lin:t=>t, in:t=>t*t, out:t=>1-(1-t)**2, inout:t=>t<.5?2*t*t:1-2*(1-t)**2, snap:t=>1-(1-t)**4, back:t=>{const u=t-1;return u*u*(3.2*u+2.2)+1}, step:()=>0 };
 export function sample(clip, time) {
@@ -16,6 +17,7 @@ export function validate(p) {
   const fail=msg=>{throw Error(msg)};
   if(p?.format!=='nightcamp-cutout-v1')fail('Không đúng định dạng project Cutout Studio v1');
   validateAttachments(p.attachments);
+  validateMountProject(p);
   const c=p.clip;
   if(!c||!Number.isFinite(c.dur)||c.dur<.1||c.dur>30||!Array.isArray(c.keys)||!c.keys.length||c.keys.length>2000)fail('Clip hoặc thời lượng không hợp lệ');
   if(!['walk','loop','attack','pose'].includes(c.kind)||typeof c.name!=='string'||!c.name.trim())fail('Tên / loại clip không hợp lệ');
@@ -38,5 +40,5 @@ export function gameExport(project) {
     const register=(s,key)=>{if(s.src.startsWith('data:')){const ext=s.src.startsWith('data:image/webp')?'webp':'png',file=key+'.'+ext;images.push({file,data:s.src});s.src='assets/'+file}sprites[key]={src:s.src,w:s.w,h:s.h,ax:0,ay:0};s.sprite=key};
     if(a.wingRig)for(const id of a.wingRig.spriteOrder)register(a.wingRig.sprites[id],name+'_'+id);else register(a,name);
     return a});
-  return {id,rig,images,attachments,code:`// Load after assets/manifest.js and js/poselib_data.js, before sprite loading and js/poselib.js.\nwindow.NC = window.NC || {};\nNC.ASSET_MANIFEST = Object.assign(NC.ASSET_MANIFEST || {}, ${JSON.stringify(sprites,null,2)});\nNC.POSE_LIB = Object.assign(NC.POSE_LIB || {}, ${JSON.stringify({[id]:clip},null,2)});\nNC.RIG_ATTACHMENTS = Object.assign(NC.RIG_ATTACHMENTS || {}, ${JSON.stringify({[rig]:attachments},null,2)});\n`};
+  return {id,rig,headId:project.headId,bodyId:project.bodyId,mountSignatures:structuredClone(project.mountSignatures),images,attachments,code:`// Load after assets/manifest.js and js/poselib_data.js, before sprite loading and js/poselib.js.\nwindow.NC = window.NC || {};\nNC.ASSET_MANIFEST = Object.assign(NC.ASSET_MANIFEST || {}, ${JSON.stringify(sprites,null,2)});\nNC.POSE_LIB = Object.assign(NC.POSE_LIB || {}, ${JSON.stringify({[id]:clip},null,2)});\nNC.RIG_ATTACHMENTS = Object.assign(NC.RIG_ATTACHMENTS || {}, ${JSON.stringify({[rig]:attachments},null,2)});\n`};
 }

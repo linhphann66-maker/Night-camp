@@ -1,0 +1,37 @@
+import {setMountId,saveMountProfile,exportAccessoryPack,importAccessoryPack,mountTarget,ORIGINAL_HEAD_ID} from './mount-profiles.mjs';
+import {attachmentName} from './names-vi.mjs';
+export function mountProfileUI(actions){
+ const character=document.createElement('fieldset');character.id='mountIdentity';
+ character.innerHTML='<legend>Mã đầu & thân cho game</legend><label>Mã đầu (headId)<input id="mountHeadId" spellcheck="false" maxlength="120"></label><label>Mã thân (bodyId)<input id="mountBodyId" spellcheck="false" maxlength="120"></label><p>Đầu Traveler gốc: <code>'+ORIGINAL_HEAD_ID+'</code>. Khi thay ảnh, kích thước hoặc khớp, Studio tự phân biệt cấu hình mới. Có thể đặt mã riêng ổn định như dau_tien_v1 / than_giap_v1. Đổi tên trang phục không đổi mã đầu.</p><p id="mountIdentityInfo"></p>';
+ document.getElementById('outfitFit').before(character);
+ character.insertAdjacentHTML('beforeend','<button id="useOriginalHead">Dùng đầu Traveler gốc như demo</button>');
+ const panel=document.createElement('fieldset');panel.id='mountProfilePanel';
+ panel.innerHTML='<legend>Cấu hình gắn & xuất riêng</legend><label>Mã phụ kiện cho game<input id="mountAccessoryId" spellcheck="false" maxlength="120"></label><p id="mountFitInfo" role="status"></p><button id="saveMountProfile">Lưu cấu hình cho đầu / thân hiện tại</button><p>Chọn món phía trên, căn vị trí rồi lưu. Một món có nhiều cấu hình cho các đầu / thân. Cánh dùng mã thân, giữ cả rig và animation. Thiếu cấu hình sẽ ẩn khi đổi đầu/thân; bật Hiện phụ kiện để căn rồi lưu.</p><button id="exportSelectedAccessory">Xuất riêng món đang chọn</button><h3>Xuất nhiều món</h3><button id="mountSelectAll">Chọn tất cả</button><button id="mountSelectNone">Bỏ chọn</button><div id="mountExportItems"></div><button id="exportAccessoryPack">Xuất gói các món đã tích</button><button id="importAccessoryPack">Nhập gói phụ kiện / cánh</button><input id="accessoryPackFile" type="file" accept=".json,application/json" hidden><button id="downloadAccessoryRuntime">Tải bộ ghép phụ kiện (.mjs)</button><a href="accessory-integration.md" target="_blank" rel="noopener">Hướng dẫn tích hợp gói vào game ↗</a><p>Gói chỉ gồm các món được chọn và cấu hình đã lưu, không kèm nhân vật. Lưu project / Xuất game bundle cũ vẫn là toàn bộ nhân vật. Game mới cần dùng mã đầu/thân và bộ ghép để chọn đúng cấu hình.</p>';
+ document.getElementById('accessoryPanel').append(panel);
+ panel.querySelector('#mountFitInfo').insertAdjacentHTML('afterend','<details><summary>Các mã đã có cấu hình</summary><div id="mountSavedProfiles"></div></details>');
+ const $=id=>document.getElementById(id),chosen=new Set();let initialized=false;
+ const safe=fn=>async()=>{try{await fn()}catch(e){actions.message('Lỗi cấu hình: '+e.message)}};
+ $('useOriginalHead').onclick=safe(async()=>{await actions.useOriginalHead();refresh();actions.message('Đã dùng đúng ảnh, kích thước và mã đầu Traveler gốc. Phụ kiện chưa có cấu hình cho đầu này sẽ ẩn để căn lại.')});
+ async function edit(fn){const p=structuredClone(actions.project());fn(p);await actions.set(p);refresh()}
+ for(const [id,target]of [['mountHeadId','head'],['mountBodyId','body']])$(id).onchange=safe(()=>edit(p=>setMountId(p,target,$(id).value.trim())));
+ $('mountAccessoryId').onchange=safe(()=>edit(p=>{const id=actions.current()?.id,a=p.attachments.find(a=>a.id===id),value=$('mountAccessoryId').value.trim();if(!a)throw Error('Chọn một phụ kiện');if(p.attachments.some(v=>v.id!==id&&v.accessoryId===value))throw Error('Mã phụ kiện đã được dùng');a.accessoryId=value}));
+ $('saveMountProfile').onclick=safe(async()=>{const id=actions.current()?.id;await edit(p=>{const a=p.attachments?.find(a=>a.id===id);if(!a)throw Error('Chọn một phụ kiện / cánh trước');saveMountProfile(a,p)});actions.message('Đã lưu cấu hình theo đúng mã và kích thước đầu / thân. Các cấu hình khác giữ nguyên.')});
+ async function output(ids){const p=actions.project(),pack=await exportAccessoryPack(p,ids,actions.portableImage);if(actions.project()!==p)throw Error('Project vừa thay đổi; hãy xuất lại');actions.download((pack.items.length===1?pack.items[0].accessoryId:'phu-kien')+'.accessory-pack.json',JSON.stringify(pack,null,2));actions.message('Đã xuất '+pack.items.length+' món, đủ ảnh và cấu hình đầu/thân; không kèm ảnh nhân vật.')}
+ $('exportSelectedAccessory').onclick=safe(()=>{const a=actions.current();if(!a)throw Error('Chọn món muốn xuất');return output([a.id])});
+ $('exportAccessoryPack').onclick=safe(()=>output([...chosen]));
+ $('mountSelectAll').onclick=()=>{for(const a of actions.project().attachments||[])chosen.add(a.id);refresh()};$('mountSelectNone').onclick=()=>{chosen.clear();refresh()};
+ $('importAccessoryPack').onclick=()=>$('accessoryPackFile').click();$('accessoryPackFile').onchange=safe(async()=>{try{const f=$('accessoryPackFile').files[0];if(!f)return;if(f.size>30*1024*1024)throw Error('Gói tối đa 30 MB');const p=actions.project(),pack=JSON.parse(await f.text());if(actions.project()!==p)throw Error('Project vừa thay đổi');await actions.set(importAccessoryPack(p,pack));refresh();actions.message('Đã nhập gói. Món thiếu cấu hình đầu/thân hiện tại sẽ ẩn; chọn món, căn lại rồi lưu cấu hình.')}finally{$('accessoryPackFile').value=''}});
+ $('downloadAccessoryRuntime').onclick=safe(async()=>{const r=await fetch(new URL('accessory-runtime.mjs',import.meta.url));if(!r.ok)throw Error('Không tải được bộ ghép');actions.download('accessory-runtime.mjs',await r.text(),'text/javascript')});
+ function refresh(){
+  const p=actions.project();if(!p)return;
+  $('mountHeadId').value=p.headId||'';$('mountBodyId').value=p.bodyId||'';
+  $('mountIdentityInfo').textContent='Kiểm tra hình học: đầu '+(p.mountSignatures?.head||'—')+' · thân '+(p.mountSignatures?.body||'—');
+  const a=actions.current(),target=a&&mountTarget(a);$('mountAccessoryId').disabled=!a;$('mountAccessoryId').value=a?.accessoryId||'';$('saveMountProfile').disabled=!target;$('exportSelectedAccessory').disabled=!a;
+  const missing=a?.mountStatus==='missing-profile';$('mountFitInfo').textContent=!a?'Chọn phụ kiện / cánh để xem cấu hình.':!target?'Vũ khí cầm tay dùng điểm gắn bàn tay; không ràng buộc đầu/thân.':(missing?'⚠ Chưa có cấu hình khớp. Căn món này rồi bấm Lưu cấu hình. ':'✓ Cấu hình hiện tại: ')+(target==='head'?'headId = '+p.headId:'bodyId = '+p.bodyId)+' · Đã lưu '+(a.mountProfiles?.length||0)+' cấu hình.';
+  $('mountSavedProfiles').replaceChildren(...(a?.mountProfiles||[]).map(f=>{const row=document.createElement('p');row.textContent=(f.target==='head'?'Đầu: '+f.headId:'Thân: '+f.bodyId)+' · '+f.signature;return row}));
+  const items=p.attachments||[],ids=new Set(items.map(a=>a.id));for(const id of chosen)if(!ids.has(id))chosen.delete(id);if(!initialized&&items.length){for(const a of items)if(a.visible!==false)chosen.add(a.id);initialized=true}
+  $('mountExportItems').replaceChildren(...items.map(a=>{const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=chosen.has(a.id);input.dataset.attachmentId=a.id;input.onchange=()=>{input.checked?chosen.add(a.id):chosen.delete(a.id);$('exportAccessoryPack').disabled=!chosen.size};label.append(input,document.createTextNode(' '+attachmentName(a)+' · '+(a.visible===false?'đang ẩn':'đang hiện')));return label}));
+  $('exportAccessoryPack').disabled=!chosen.size;
+ }
+ return {refresh};
+}

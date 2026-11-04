@@ -1,5 +1,6 @@
 import {makeWingAttachment} from './wings.mjs';
 import {activateEquipment} from './equipment.mjs';
+import {saveMountProfile} from './mount-profiles.mjs';
 export function mountWingEditor(actions){
  const button=document.createElement('button');button.id='wingStudioButton';button.textContent='✧ Cánh & rig';
  const dialog=document.createElement('dialog');dialog.id='wingStudioDialog';dialog.className='pet-mode-dialog';dialog.setAttribute('aria-label','Thiết kế và rig cánh');
@@ -14,8 +15,8 @@ export function mountWingEditor(actions){
    if(e.data?.type==='nightcamp.wing.apply'){
     if(!dialog.open||!hero||hero!==actions.project())throw Error('Project nhân vật đã đổi. Mở lại mục Cánh & rig.');
     const items=structuredClone(hero.attachments||[]),index=items.findIndex(a=>a.id===attachmentId),a=makeWingAttachment(e.data.project,index<0?undefined:items[index]);
-    if(index<0)items.push(a);else items[index]=a;await actions.set(activateEquipment(items,a.id));attachmentId=a.id;
-    frame.contentWindow.postMessage({type:'nightcamp.wing.applied'},location.origin);actions.message('Đã gắn rig cánh sau lưng. Lưu project để mang cả cánh và animation sang demo.');
+    saveMountProfile(a,hero);if(index<0)items.push(a);else items[index]=a;await actions.set(activateEquipment(items,a.id));attachmentId=a.id;
+    frame.contentWindow.postMessage({type:'nightcamp.wing.applied'},location.origin);actions.message('Đã gắn cánh và lưu cấu hình cho thân '+hero.bodyId+'. Có thể xuất riêng cánh ở mục Phụ kiện & vũ khí.');
    }
    if(e.data?.type==='nightcamp.wing.close')dialog.close();
   }catch(error){actions.message('Lỗi cánh: '+error.message);frame.contentWindow.postMessage({type:'nightcamp.wing.error',message:error.message},location.origin)}

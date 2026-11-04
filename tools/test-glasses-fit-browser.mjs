@@ -14,6 +14,7 @@ const errors=[],near=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
 const click=(p,id)=>p.locator(id).evaluate(el=>el.click());
 const value=(p,id,v,event='change')=>p.locator(id).evaluate((el,{v,event})=>{el.value=v;if(event)el.dispatchEvent(new Event(event,{bubbles:true}))},{v,event});
 const stored=p=>p.evaluate(()=>JSON.parse(localStorage.getItem('nightcamp.cutout.v1')));
+const artwork=a=>Object.fromEntries(Object.entries(a).filter(([k])=>!['accessoryId','mountProfiles','mountStatus'].includes(k)));
 const download=async(p,id)=>{const [d]=await Promise.all([p.waitForEvent('download'),click(p,id)]);return JSON.parse(await fs.readFile(await d.path(),'utf8'))};
 try{
  const context=await b.newContext({viewport:{width:590,height:1060}});context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
@@ -36,12 +37,12 @@ try{
  const old=structuredClone(project);Object.assign(old.attachments[0],{w:raw.w,h:raw.h,rotation:0,x:0,y:0});old.attachments.push(custom);
  await p.locator('#projectFile').setInputFiles({name:'oversized-old-glasses.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(old))});
  await p.waitForFunction(w=>JSON.parse(localStorage.getItem('nightcamp.cutout.v1')).attachments[0].w===w,raw.w);
- assert.deepEqual((await stored(p)).attachments,old.attachments,'opening old project must not change manual artwork');
+ const opened=await stored(p);assert.deepEqual(opened.attachments.map(artwork),old.attachments.map(artwork),'opening old project may add fitting metadata but must not change manual artwork');
  await value(p,'#attachmentList',glassId);await p.waitForFunction(()=>!document.getElementById('restoreGlassesSizes').hidden);
  await click(p,'#restoreGlassesSizes');await p.waitForFunction(()=>document.getElementById('status').textContent.includes('Đã căn cỡ kính theo mắt'));
  const fixed=await stored(p);for(const k of ['w','h','rotation','anchor','x','y','scale'])assert.deepEqual(fixed.attachments[0][k],expected[k]);
- assert.deepEqual(fixed.attachments[1],hat);assert.deepEqual(fixed.attachments[2],custom);assert.deepEqual(fixed.parts,old.parts);assert.deepEqual(fixed.clip,old.clip);
- await click(p,'#undo');await p.waitForTimeout(100);assert.deepEqual((await stored(p)).attachments,old.attachments);
+ assert.deepEqual(fixed.attachments[1],hat);assert.deepEqual(artwork(fixed.attachments[2]),artwork(custom));assert.deepEqual(fixed.parts,old.parts);assert.deepEqual(fixed.clip,old.clip);
+ await click(p,'#undo');await p.waitForTimeout(100);assert.deepEqual((await stored(p)).attachments,opened.attachments);
  await click(p,'#redo');await p.waitForTimeout(100);assert.deepEqual((await stored(p)).attachments,fixed.attachments);
  await click(p,'#restoreGlassesSizes');await p.waitForTimeout(100);assert.deepEqual((await stored(p)).attachments,fixed.attachments);
  const saved=await download(p,'#save');assert.ok(saved.attachments[0].src.startsWith('data:'));

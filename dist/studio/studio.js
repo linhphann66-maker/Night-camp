@@ -18,8 +18,10 @@ import {mountPetEditor} from './pet-entry.mjs';
 import {mountWingEditor} from './wing-entry.mjs';
 import {loadAttachmentSprites,attachmentImages} from './wings.mjs';
 import {mountMapEditor} from './map-entry.mjs';
+import {reconcileMounts,rebasePortableMounts} from './mount-profiles.mjs';
+import {mountProfileUI} from './mount-profile-ui.mjs';
 const $=id=>document.getElementById(id), NC=window.NC;
-let source, libraryUI;
+let source, libraryUI, mountUI;
 const status=msg=>$('status').textContent=msg;
 const labels={head:'Đầu',torso:'Thân',armF:'Tay gần',armB:'Tay xa',legF:'Chân gần',legB:'Chân xa'};
 const channels={lean:'Nghiêng thân',head:'Góc đầu',aF:'Tay gần',eF:'Khuỷu gần',aB:'Tay xa',eB:'Khuỷu xa',legF:'Đùi gần',kF:'Gối gần',legB:'Đùi xa',kB:'Gối xa',wAng:'Góc vũ khí',x:'Dịch X',y:'Dịch Y',headY:'Dịch đầu Y'};
@@ -41,10 +43,12 @@ function options(el,rows){el.replaceChildren(...rows.map(([value,text])=>{const 
 function checkpoint(){state.undo.push(JSON.stringify(state.project));if(state.undo.length>60)state.undo.shift();state.redo=[]}
 function persist(){try{localStorage.setItem('nightcamp.cutout.v1',JSON.stringify(state.project));status('Đã lưu nháp trong trình duyệt')}catch{status('Bộ nhớ nháp đầy. Bấm Lưu project để tải bản sao.')}}
 async function image(src){if(state.images.has(src))return state.images.get(src);const promise=new Promise((resolve,reject)=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>resolve(im);im.onerror=()=>reject(Error('Không tải được ảnh '+src.slice(0,100)));im.src=source.assetURL(src)});state.images.set(src,promise);try{return await promise}catch(e){state.images.delete(src);throw e}}
-async function portableProject(){const p=structuredClone(state.project);await Promise.all(attachmentImages(p).map(async s=>{if(s.src.startsWith('data:'))return;const img=await image(s.src),canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;canvas.getContext('2d').drawImage(img,0,0);s.src=canvas.toDataURL('image/png')}));return p}
+async function portableImage(src){if(src.startsWith('data:'))return src;const img=await image(src),canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;canvas.getContext('2d').drawImage(img,0,0);return canvas.toDataURL('image/png')}
+async function portableProject(){const p=reconcileMounts(structuredClone(state.project),catalog);await Promise.all(attachmentImages(p).map(async s=>{s.src=await portableImage(s.src)}));return rebasePortableMounts(p)}
 async function syncRig(){
   const p=state.project;
   ensureMiddleJoints(p.parts);
+  reconcileMounts(p,catalog);mountUI?.refresh();
   await Promise.all(PARTS.map(async part=>{const s=p.parts[part];NC.SPR['rig_studio_'+part]={...s,name:'rig_studio_'+part,img:await image(s.src)}}));
   // Use a fresh rig name to avoid the original renderer's rig cache after anchor edits.
   const name='studio'+(++syncRig.seq);for(const part of PARTS)NC.SPR[`rig_${name}_${part}`]=NC.SPR['rig_studio_'+part];
@@ -71,7 +75,9 @@ function record(){checkpoint();const c=state.project.clip;const t=Math.round(sta
 function download(name,content,type='application/json'){const a=document.createElement('a');const url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000)}
 async function preset(){checkpoint();const c=state.project.clip,name=$('preset').value,definition=NC.Anim.CLIPS[name];if(definition){c.dur=definition.dur;c.kind='attack';c.hit=definition.ev?.find(e=>e[1]==='hit')?.[0]??c.dur*.4}else{c.kind=/walk|run/i.test(name)?'walk':'loop';c.hit=Math.min(c.hit,c.dur)}const dur=c.dur,count=Math.max(9,Math.ceil(dur*30)+1);c.keys=Array.from({length:count},(_,i)=>{const t=i*dur/(count-1);return {t,curve:'lin',P:NC.Anim.sample(name,t,animationContext(t/dur))}});if(c.kind==='walk'||c.kind==='loop')c.keys.at(-1).P=structuredClone(c.keys[0].P);selectKey(0);renderMeta();persist()}
 function event(id,type,fn){$(id).addEventListener(type,safe(fn))}
-const accessoryUI=mountAccessories({project:()=>state.project,head:()=>state.project.parts.head,eyes:()=>NC.eyesOf?.(state.rig.P.head),image,headWidth:()=>{const s=state.rig.P.head;return s.w*(s.head?.[2]||.8)},message:status,previewAnchor:(id,anchor)=>{const a=NC.ITEMS.studio_top?.attachments?.find(a=>a.id===id);if(a)a.anchor=[...anchor]},set:async items=>{checkpoint();state.project.attachments=prepareEquipment(items);await syncRig();persist()}});
+const accessoryUI=mountAccessories({project:()=>state.project,head:()=>state.project.parts.head,eyes:()=>NC.eyesOf?.(state.rig.P.head),image,headWidth:()=>{const s=state.rig.P.head;return s.w*(s.head?.[2]||.8)},message:status,refreshProfiles:()=>mountUI?.refresh(),previewAnchor:(id,anchor)=>{const a=NC.ITEMS.studio_top?.attachments?.find(a=>a.id===id);if(a)a.anchor=[...anchor]},set:async items=>{checkpoint();state.project.attachments=prepareEquipment(items);await syncRig();persist()}});
+async function setMountProject(p){p.attachments=prepareEquipment(p.attachments);validate(p);checkpoint();state.project=p;await syncRig();renderPart();await accessoryUI.refresh();persist()}
+mountUI=mountProfileUI({project:()=>state.project,current:()=>accessoryUI.selected(),portableImage,download,message:status,set:setMountProject,useOriginalHead:async()=>{const p=structuredClone(state.project);p.parts.head=structuredClone(catalog.sprites.rig_traveler_head);p.headId='nightcamp-head-original-v1';await setMountProject(p)}});
 mountTimelineTools({
  ready:()=>!!state.project&&!!state.pose,
  error:message=>status('Lỗi: '+message),
@@ -164,7 +170,7 @@ event('stage','pointerdown',e=>{e.preventDefault();if(!state.pose)return;const r
 event('stage','pointermove',e=>{if(accessoryDrag){e.preventDefault();const a=state.project.attachments.find(a=>a.id===accessoryDrag.id),delta=screenDelta(accessoryDrag.matrix,e.clientX-accessoryDrag.pointer[0],e.clientY-accessoryDrag.pointer[1]);a.x=Math.max(-2000,Math.min(2000,accessoryDrag.x+delta[0]));a.y=Math.max(-2000,Math.min(2000,accessoryDrag.y+delta[1]));const live=NC.ITEMS.studio_top.attachments.find(item=>item.id===a.id);live.x=a.x;live.y=a.y;accessoryUI.updatePosition();return}if(!drag)return;e.preventDefault();const r=$('stage').getBoundingClientRect(),delta=[e.clientX-r.left-drag.point[0],e.clientY-r.top-drag.point[1]],limb=Object.values(LIMBS).find(l=>[l.end,l.middle,l.root].includes(drag.name));
  if(limb){state.part=limb.part;if(drag.name===limb.end&&!e.shiftKey)state.pose=solveEndpoint(drag.pose,limb,[drag.joints[limb.end][0]+delta[0],drag.joints[limb.end][1]+delta[1]],measure);else if(drag.name===limb.middle||e.shiftKey)state.pose=bendFromDrag(drag.pose,limb,drag.joints,delta,measure);else{const pivot=drag.joints[limb.root],end=drag.joints[limb.end],a=Math.atan2(end[1]-pivot[1],end[0]-pivot[0]),b=Math.atan2(end[1]+delta[1]-pivot[1],end[0]+delta[0]-pivot[0]);state.pose={...drag.pose,hk:0,bk:0,ik:0,plant:0};const joint=measure({...state.pose,[limb.angle]:state.pose[limb.angle]+.01}),next=Math.atan2(joint[limb.end][1]-joint[limb.root][1],joint[limb.end][0]-joint[limb.root][0]);state.pose[limb.angle]+=(Math.sign(wrap(next-a))||1)*wrap(b-a)}}else{const pivot=drag.joints.neck,end=drag.joints.headTop;state.pose={...drag.pose,head:drag.pose.head+state.face*wrap(Math.atan2(end[1]+delta[1]-pivot[1],end[0]+delta[0]-pivot[0])-Math.atan2(end[1]-pivot[1],end[0]-pivot[0]))}}
  renderChannels();status('Đang chỉnh '+(limb?labels[limb.part]:'đầu')+'. Kéo vòng khuỷu/gối để gập; bấm Ghi pose khi xong.');});
-for(const name of ['pointerup','pointercancel','lostpointercapture'])event('stage',name,async()=>{if(accessoryDrag){accessoryDrag=null;persist();await accessoryUI.refresh()}if(drag){drag=null;renderPart()}document.body.classList.remove('rig-dragging')});
+for(const name of ['pointerup','pointercancel','lostpointercapture'])event('stage',name,async()=>{if(accessoryDrag){accessoryDrag=null;reconcileMounts(state.project,catalog);persist();await accessoryUI.refresh()}if(drag){drag=null;renderPart()}document.body.classList.remove('rig-dragging')});
 for(const id of ['stage','anchor'])for(const name of ['contextmenu','selectstart','dragstart'])$(id).addEventListener(name,e=>e.preventDefault());
 function render(){
  const canvas=$('stage'),r=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;

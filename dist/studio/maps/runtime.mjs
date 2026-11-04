@@ -3,7 +3,8 @@
 import {NATIVE_GROUNDS,NATIVE_MAPS,NATIVE_GROUND_BUILD} from './native-ground.mjs';
 export {NATIVE_GROUNDS,NATIVE_MAPS,NATIVE_GROUND_BUILD};
 export const TERRAINS={grass:{name:'Cỏ',color:'#76aa5e'},dirt:{name:'Đất / đường',color:'#cdaa76'},stone:{name:'Đá lát',color:'#92929a'},sand:{name:'Cát',color:'#dcc08c'},water:{name:'Nước',color:'#5caccf'},moss:{name:'Rêu / cỏ tối',color:'#567e64'}};
-export const MAP_RUNTIME_VERSION=3;
+export const MAP_RUNTIME_VERSION=4;
+export const MAP_INTERACTION_SCHEMA=Object.freeze({version:1,collection:'project.objects[].interaction',identity:'mapId + object.id; IDs belong to this map, not separate object packs',actionId:'Shared handler ID; many objects may use mine_spirit_stone',range:'World units from player feet to object-local interaction.point after scale/rotation/flip',reward:'resourceId + inclusive integer min/max; spirit_stone is Linh thạch',respawnSeconds:'Seconds after successful collection; 0 means no respawn',runtime:'interactionDefinitions, nearestInteraction. InteractionSimulator is PREVIEW ONLY: not an authoritative currency or multiplayer system. Game server must validate channeling and atomically credit wallet once + deplete the node.'});
 export const MONSTER_SPAWN_SCHEMA=Object.freeze({version:1,collection:'project.monsterSpawns',pointId:'id',monsterTypeId:'monsterId',identity:'mapId + spawnId',coordinates:'World XY at monster feet, same units/origin as project.spawn; not cells or screen pixels',count:'Maximum alive + pending per point',respawnSeconds:'Seconds after death; 0 means no respawn',registry:'Game must map monsterId to its own template/assets/AI. Never infer type from spawn point ID or image filename.',runtime:'MonsterSpawnController: poll(dt) -> requests; confirm(instanceId) on creation, reject on failure, markDead on death. Use one authoritative controller per map instance on server; offline can run locally.'});
 const safeId=id=>typeof id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(id)&&!['__proto__','constructor','prototype'].includes(id);
 const finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
@@ -25,7 +26,7 @@ export function validateMap(p){
  if(p.terrain.some(id=>!Object.hasOwn(TERRAINS,id)&&p.assets[id]?.kind!=='ground')||p.blocked.some(v=>v!==0&&v!==1)||p.walkable.some(v=>v!==0&&v!==1))fail('Ô nền / vùng va chạm không hợp lệ');
  if(p.roads!==undefined){if(!Array.isArray(p.roads)||p.roads.length>128)fail('Tối đa 128 đường cong');const ids=new Set();let count=0;for(const r of p.roads){if(!r||!safeId(r.id)||ids.has(r.id)||!['dirt','sand','stone'].includes(r.material)||!finite(r.width,8,512)||!finite(r.softness,0,.9)||!finite(r.smoothness,0,1)||!Array.isArray(r.points)||r.points.length<2||r.points.length>256)fail('Đường cong không hợp lệ: cần 2–256 điểm, rộng 8–512');ids.add(r.id);count+=r.points.length;for(const v of r.points)if(!v||!finite(v.x,0,p.cols*p.cell)||!finite(v.y,0,p.rows*p.cell))fail('Điểm đường cong nằm ngoài map')}if(count>4096)fail('Tối đa 4096 điểm đường cong mỗi map')}
  if(!Array.isArray(p.objects)||p.objects.length>5000)fail('Tối đa 5000 vật thể');const ids=new Set();
- for(const o of p.objects){if(!safeId(o.id)||ids.has(o.id)||!Object.hasOwn(p.assets,o.asset)||p.assets[o.asset].kind==='ground'||!finite(o.x,0,p.cols*p.cell)||!finite(o.y,0,p.rows*p.cell)||!finite(o.scale,.05,10)||!finite(o.rotation,-Math.PI*20,Math.PI*20)||typeof o.flip!=='boolean'||!['ground','sorted','front'].includes(o.layer)||!shape(o.collider??null)||!shape(o.walk??null))fail('Vật thể / điểm neo không hợp lệ');ids.add(o.id)}
+ for(const o of p.objects){if(!safeId(o.id)||ids.has(o.id)||!Object.hasOwn(p.assets,o.asset)||p.assets[o.asset].kind==='ground'||!finite(o.x,0,p.cols*p.cell)||!finite(o.y,0,p.rows*p.cell)||!finite(o.scale,.05,10)||!finite(o.rotation,-Math.PI*20,Math.PI*20)||typeof o.flip!=='boolean'||!['ground','sorted','front'].includes(o.layer)||!shape(o.collider??null)||!shape(o.walk??null))fail('Vật thể / điểm neo không hợp lệ');ids.add(o.id);validateInteraction(o.interaction)}
  if(!p.spawn||!finite(p.spawn.x,0,p.cols*p.cell)||!finite(p.spawn.y,0,p.rows*p.cell))fail('Điểm xuất hiện nằm ngoài map');
  if(!Array.isArray(p.warps)||p.warps.length>200)fail('Danh sách cửa map không hợp lệ');
  const warps=new Set();for(const w of p.warps){if(!safeId(w.id)||warps.has(w.id)||!safeId(w.to)||!safeId(w.at)||!finite(w.x,0,p.cols*p.cell)||!finite(w.y,0,p.rows*p.cell)||!finite(w.radius,8,500))fail('Cửa chuyển map không hợp lệ');warps.add(w.id)}
@@ -77,14 +78,54 @@ export function reanchorAsset(p,id,ax,ay){
  if(!finite(ax,0,1)||!finite(ay,0,1))fail('Neo ảnh phải nằm trong 0–1');const next=structuredClone(p),s=next.assets[id];if(!s||s.kind==='ground')fail('Chọn một vật thể để đặt neo gốc');const dx=(ax-s.ax)*s.w,dy=(ay-s.ay)*s.h,shift=shape=>{if(shape){shape.x-=dx;shape.y-=dy}};
  for(const o of next.objects.filter(o=>o.asset===id)){const [x,y]=objectWorld(o,dx,dy);o.x=x;o.y=y;shift(o.collider);shift(o.walk)}shift(s.collider);shift(s.walk);s.ax=ax;s.ay=ay;s.grounding='anchor';return validateMap(next);
 }
-export function pointWalkable(p,x,y){
+export function pointWalkable(p,x,y,{isObjectActive=()=>true}={}){
  const i=cellIndex(p,x,y);if(i<0||p.blocked[i])return false;
- let onBridge=false;for(const o of p.objects){const [lx,ly]=objectLocal(o,x,y);if(insideShape(o.collider,lx,ly))return false;if(insideShape(o.walk,lx,ly))onBridge=true}
+ let onBridge=false;for(const o of p.objects){if(!isObjectActive(o.id))continue;const [lx,ly]=objectLocal(o,x,y);if(insideShape(o.collider,lx,ly))return false;if(insideShape(o.walk,lx,ly))onBridge=true}
  return !(p.terrain[i]==='water'||TERRAINS[p.terrain[i]]?.water)||p.walkable[i]===1||onBridge;
 }
-export function canWalk(p,x,y,r=12){if(!pointWalkable(p,x,y))return false;for(let i=0;i<8;i++)if(!pointWalkable(p,x+Math.cos(i*Math.PI/4)*r,y+Math.sin(i*Math.PI/4)*r*.6))return false;return true}
-export function moveActor(p,actor,dx,dy,dt,speed=180){const len=Math.max(1,Math.hypot(dx,dy)),x=dx/len*speed*Math.max(0,Math.min(.1,dt)),y=dy/len*speed*Math.max(0,Math.min(.1,dt)),n=Math.max(1,Math.ceil(Math.hypot(x,y)/5));for(let i=0;i<n;i++){if(canWalk(p,actor.x+x/n,actor.y,actor.radius??12))actor.x+=x/n;if(canWalk(p,actor.x,actor.y+y/n,actor.radius??12))actor.y+=y/n}return actor}
+export function canWalk(p,x,y,r=12,options={}){if(!pointWalkable(p,x,y,options))return false;for(let i=0;i<8;i++)if(!pointWalkable(p,x+Math.cos(i*Math.PI/4)*r,y+Math.sin(i*Math.PI/4)*r*.6,options))return false;return true}
+export function moveActor(p,actor,dx,dy,dt,speed=180,options={}){const len=Math.max(1,Math.hypot(dx,dy)),x=dx/len*speed*Math.max(0,Math.min(.1,dt)),y=dy/len*speed*Math.max(0,Math.min(.1,dt)),n=Math.max(1,Math.ceil(Math.hypot(x,y)/5));for(let i=0;i<n;i++){if(canWalk(p,actor.x+x/n,actor.y,actor.radius??12,options))actor.x+=x/n;if(canWalk(p,actor.x,actor.y+y/n,actor.radius??12,options))actor.y+=y/n}return actor}
 export function warpAt(p,x,y){return p.warps.find(w=>Math.hypot(w.x-x,w.y-y)<=w.radius)||null}
+export function defaultInteraction(type='mine'){
+ return {enabled:true,type,actionId:type==='mine'?'mine_spirit_stone':type==='gather'?'gather_resource':'interact_custom',label:type==='mine'?'Đào linh thạch':type==='gather'?'Thu thập':'Tương tác',range:96,point:{x:0,y:0},durationSeconds:3,respawnSeconds:30,deplete:type!=='custom',reward:type==='custom'?null:{resourceId:'spirit_stone',min:3,max:8}};
+}
+export function validateInteraction(i){
+ if(i===undefined)return;
+ if(!i||typeof i.enabled!=='boolean'||!['mine','gather','custom'].includes(i.type)||!safeId(i.actionId)||typeof i.label!=='string'||!i.label.trim()||i.label.length>100||!finite(i.range,1,2000)||!i.point||!finite(i.point.x,-4096,4096)||!finite(i.point.y,-4096,4096)||!finite(i.durationSeconds,.1,600)||!finite(i.respawnSeconds,0,86400)||typeof i.deplete!=='boolean')fail('Cấu hình tương tác vật thể không hợp lệ');
+ const r=i.reward;if(i.type==='custom'){if(r!==null)fail('Tương tác tùy chỉnh dùng handler của game, không tự phát tiền')}else if(!r||!safeId(r.resourceId)||!Number.isSafeInteger(r.min)||!Number.isSafeInteger(r.max)||!finite(r.min,1,1000000)||!finite(r.max,r.min,1000000))fail('Lượng tài nguyên phải là số nguyên 1–1000000, tối đa không nhỏ hơn tối thiểu');
+}
+export function interactionPoint(o){return objectWorld(o,o.interaction.point.x,o.interaction.point.y)}
+export function drawInteractionMarkers(ctx,p,{zoom=1,selected=null}={}){
+ ctx.save();ctx.lineWidth=1.5/zoom;ctx.font=`${11/zoom}px system-ui`;ctx.setLineDash([4/zoom,4/zoom]);for(const o of p.objects){const i=o.interaction;if(!i?.enabled)continue;const [x,y]=interactionPoint(o);ctx.strokeStyle=o.id===selected?'#ffe7a4':'#86e4e4';ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.arc(x,y,i.range,0,Math.PI*2);ctx.stroke();ctx.fillText(o.id+' · '+i.label,x+8/zoom,y-8/zoom)}ctx.restore();
+}
+export function interactionDefinitions(data,{enabledOnly=true}={}){
+ const p=validateMap(data?.format==='darkin-map-bundle-v1'?data.project:data);
+ return p.objects.filter(o=>o.interaction&&(!enabledOnly||o.interaction.enabled)).map(o=>{const [x,y]=interactionPoint(o);return {mapId:p.id,objectId:o.id,assetId:o.asset,x,y,interaction:structuredClone(o.interaction)}});
+}
+export function nearestInteraction(p,actor,{isAvailable=()=>true,canInteract=()=>true}={}){
+ if(!actor||!Number.isFinite(actor.x)||!Number.isFinite(actor.y)||actor.dead||actor.hp===0)return null;let found=null;
+ for(const o of p.objects){const i=o.interaction;if(!i?.enabled||!isAvailable(o.id))continue;const [x,y]=interactionPoint(o),distance=Math.hypot(actor.x-x,actor.y-y);if(distance<=i.range&&(!found||distance<found.distance)&&canInteract(o,actor))found={objectId:o.id,mapId:p.id,x,y,distance,interaction:structuredClone(i)}}
+ return found;
+}
+// Single-user design simulation ONLY. Never use its reward as server authority.
+// No wallet writes, persistence, networking or multiplayer locking is performed.
+export class InteractionSimulator{
+ constructor(data,{random=Math.random}={}){this.project=validateMap(data?.format==='darkin-map-bundle-v1'?data.project:data);this.random=random;this.time=0;this.active=null;this.states=new Map(interactionDefinitions(this.project).map(d=>[d.objectId,{definition:d,status:'ready',progress:0,respawnAt:0}]))}
+ target(actor){return nearestInteraction(this.project,actor,{isAvailable:id=>this.states.get(id)?.status==='ready'})}
+ begin(id,actor){const s=this.states.get(id);if(this.active||s?.status!=='ready')return false;const t=nearestInteraction(this.project,actor,{isAvailable:key=>key===id});if(!t)return false;this.active=id;s.status='working';s.progress=0;s.origin={x:actor.x,y:actor.y};return true}
+ cancel(){const s=this.states.get(this.active);if(!s)return false;s.status='ready';s.progress=0;this.active=null;return true}
+ update(dt,actor){
+  if(!finite(dt,0,86400))fail('Bước thời gian tương tác không hợp lệ');this.time+=dt;const events=[];
+  for(const [id,s]of this.states)if(s.status==='cooldown'&&s.respawnAt<=this.time){s.status='ready';s.progress=0;events.push({type:'respawned',objectId:id})}
+  const s=this.states.get(this.active);if(!s)return events;const d=s.definition,i=d.interaction;
+  if(!actor||actor.dead||actor.hp===0||!Number.isFinite(actor.x)||!Number.isFinite(actor.y)||Math.hypot(actor.x-d.x,actor.y-d.y)>i.range||Math.hypot(actor.x-s.origin.x,actor.y-s.origin.y)>2){const id=this.active;this.cancel();events.push({type:'cancelled',objectId:id});return events}
+  const progress=Math.min(i.durationSeconds,s.progress+dt);if(progress<i.durationSeconds){s.progress=progress;return events}
+  let reward=null;if(i.reward){const random=this.random();if(!finite(random,0,1)||random===1)fail('Nguồn random phải nằm trong [0,1)');reward={resourceId:i.reward.resourceId,amount:i.reward.min+Math.floor(random*(i.reward.max-i.reward.min+1))}}
+  s.progress=progress;s.status=i.respawnSeconds>0?'cooldown':i.deplete?'depleted':'ready';s.respawnAt=this.time+i.respawnSeconds;this.active=null;events.push({type:'completed',mapId:this.project.id,objectId:d.objectId,actionId:i.actionId,reward});return events;
+ }
+ objectState(id){const s=this.states.get(id);if(!s)return null;const i=s.definition.interaction,hidden=i.deplete&&['cooldown','depleted'].includes(s.status),shake=s.status==='working';return {hidden,shakeX:shake?Math.sin(this.time*45)*1.5:0,shakeAngle:shake?Math.sin(this.time*33)*.012:0}}
+ walkOptions(){return {isObjectActive:id=>!this.objectState(id)?.hidden}}
+}
 export function validateMonsterSpawns(p){
  if(p.monsterSpawns===undefined)return;
  if(!Array.isArray(p.monsterSpawns)||p.monsterSpawns.length>256)fail('Tối đa 256 điểm sinh quái');
@@ -242,13 +283,13 @@ export class MapRenderer{
   }
   if(l.vignette){ctx.save();const r=Math.max(w,h),g=ctx.createRadialGradient(x+w*.5,y+h*.45,0,x+w*.5,y+h*.45,r*.72);g.addColorStop(0,'rgba(8,10,28,0)');g.addColorStop(1,`rgba(8,10,28,${n*.5})`);ctx.fillStyle=g;ctx.fillRect(x,y,w,h);ctx.restore()}
  }
- draw(ctx,{x=0,y=0,zoom=1,width,height,grid=false,collision=false,selected=null,actor=null,time=0,markers=false,monsterMarkers=markers,selectedMonsterSpawn=null,drawActor=null}={}){
+ draw(ctx,{x=0,y=0,zoom=1,width,height,grid=false,collision=false,selected=null,actor=null,time=0,markers=false,monsterMarkers=markers,selectedMonsterSpawn=null,interactionMarkers=false,objectState=null,drawActor=null}={}){
   const p=this.project,cs=p.cell,overview=cs*zoom<18,visible=b=>b.x1>=x&&b.y1>=y&&b.x0<=x+width/zoom&&b.y0<=y+height/zoom;ctx.save();ctx.scale(zoom,zoom);ctx.translate(-x,-y);ctx.fillStyle='#0d1520';ctx.fillRect(x,y,width/zoom,height/zoom);
   if(overview)ctx.drawImage(this.overview(),0,0,p.cols*cs,p.rows*cs);
   else for(let gy=Math.max(0,Math.floor(y/cs));gy<Math.min(p.rows,Math.ceil((y+height/zoom)/cs));gy++)for(let gx=Math.max(0,Math.floor(x/cs));gx<Math.min(p.cols,Math.ceil((x+width/zoom)/cs));gx++){const type=p.terrain[gy*p.cols+gx];ctx.drawImage(this.tile(type,gx,gy),gx*cs,gy*cs,cs+.2,cs+.2);if(type==='water'){ctx.strokeStyle='#d5f5ff33';ctx.lineWidth=1/zoom;ctx.beginPath();ctx.moveTo(gx*cs+8,gy*cs+cs*.5+Math.sin(time*2+gx)*3);ctx.lineTo(gx*cs+cs-8,gy*cs+cs*.5+Math.sin(time*2+gx+1)*3);ctx.stroke()}}
   this.drawRoads(ctx,{x,y,zoom,width,height});
-  const objects=orderedObjects(p,this.images);this.drawGroundShadows(ctx,objects,visible);
-  const draw=o=>{if(!visible(objectBounds(p,o)))return;const s=p.assets[o.asset],img=this.images.get(o.asset);ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.rotation);ctx.scale(o.scale*(o.flip?-1:1),o.scale);if(img){if(objectOccludesActor(p,o,actor,imageGeometry(img)))ctx.globalAlpha*=.5;ctx.drawImage(img,-s.ax*s.w,-s.ay*s.h,s.w,s.h)}ctx.restore()};
+  const objects=orderedObjects(p,this.images).filter(o=>!objectState?.(o.id)?.hidden);this.drawGroundShadows(ctx,objects,visible);
+  const draw=o=>{if(!visible(objectBounds(p,o)))return;const s=p.assets[o.asset],img=this.images.get(o.asset),v=objectState?.(o.id);ctx.save();ctx.translate(o.x+(v?.shakeX||0),o.y);ctx.rotate(o.rotation+(v?.shakeAngle||0));ctx.scale(o.scale*(o.flip?-1:1),o.scale);if(img){if(objectOccludesActor(p,o,actor,imageGeometry(img)))ctx.globalAlpha*=.5;ctx.drawImage(img,-s.ax*s.w,-s.ay*s.h,s.w,s.h)}ctx.restore()};
   for(const o of objects.filter(o=>o.layer==='ground'))draw(o);
   const sorted=objects.filter(o=>o.layer==='sorted');let done=false;const drawHero=()=>{if(drawActor)drawActor(ctx,actor);else{ctx.save();ctx.translate(actor.x,actor.y);ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(0,0,14,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#d3ed92';ctx.beginPath();ctx.arc(0,-17,12,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#2c4936';ctx.lineWidth=2;ctx.stroke();ctx.restore()}};
   for(const o of sorted){if(actor&&!done&&actor.y<objectGroundPoint(p,o,imageGeometry(this.images.get(o.asset))).y){drawHero();done=true}draw(o)}if(actor&&!done)drawHero();for(const o of objects.filter(o=>o.layer==='front'))draw(o);
@@ -256,9 +297,10 @@ export class MapRenderer{
   // Editor overlays deliberately follow lighting, so night mode cannot hide
   // collision paint, selection handles or spawn/warp markers.
   for(let gy=Math.max(0,Math.floor(y/cs));gy<Math.min(p.rows,Math.ceil((y+height/zoom)/cs));gy++)for(let gx=Math.max(0,Math.floor(x/cs));gx<Math.min(p.cols,Math.ceil((x+width/zoom)/cs));gx++){if(grid&&cs*zoom>=10){ctx.strokeStyle='#101a2c36';ctx.lineWidth=1/zoom;ctx.strokeRect(gx*cs,gy*cs,cs,cs)}if(collision&&(p.blocked[gy*p.cols+gx]||p.walkable[gy*p.cols+gx])){ctx.fillStyle=p.blocked[gy*p.cols+gx]?'#ff675577':'#62d6cd66';ctx.fillRect(gx*cs,gy*cs,cs,cs)}}
-  if(collision||selected)for(const o of p.objects){if(!visible(objectBounds(p,o)))continue;const s=p.assets[o.asset];ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.rotation);ctx.scale(o.scale*(o.flip?-1:1),o.scale);if(collision)for(const [shape,color]of [[o.collider,'#ff8c77'],[o.walk,'#74f0d2']])if(shape){ctx.strokeStyle=color;ctx.lineWidth=2/(zoom*o.scale);ctx.beginPath();if(shape.type==='ellipse')ctx.ellipse(shape.x,shape.y,shape.w/2,shape.h/2,0,0,Math.PI*2);else ctx.rect(shape.x-shape.w/2,shape.y-shape.h/2,shape.w,shape.h);ctx.stroke()}if(selected===o.id){ctx.strokeStyle='#e1f7a8';ctx.lineWidth=2/(zoom*o.scale);ctx.strokeRect(-s.ax*s.w,-s.ay*s.h,s.w,s.h);ctx.fillStyle='#ffbd80';ctx.beginPath();ctx.arc(0,0,5/o.scale,0,Math.PI*2);ctx.fill()}ctx.restore()}
+  if(collision||selected)for(const o of objects){if(!visible(objectBounds(p,o)))continue;const s=p.assets[o.asset];ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.rotation);ctx.scale(o.scale*(o.flip?-1:1),o.scale);if(collision)for(const [shape,color]of [[o.collider,'#ff8c77'],[o.walk,'#74f0d2']])if(shape){ctx.strokeStyle=color;ctx.lineWidth=2/(zoom*o.scale);ctx.beginPath();if(shape.type==='ellipse')ctx.ellipse(shape.x,shape.y,shape.w/2,shape.h/2,0,0,Math.PI*2);else ctx.rect(shape.x-shape.w/2,shape.y-shape.h/2,shape.w,shape.h);ctx.stroke()}if(selected===o.id){ctx.strokeStyle='#e1f7a8';ctx.lineWidth=2/(zoom*o.scale);ctx.strokeRect(-s.ax*s.w,-s.ay*s.h,s.w,s.h);ctx.fillStyle='#ffbd80';ctx.beginPath();ctx.arc(0,0,5/o.scale,0,Math.PI*2);ctx.fill()}ctx.restore()}
   this.overlay?.(ctx,{x,y,zoom,width,height});
   if(monsterMarkers)drawMonsterSpawnMarkers(ctx,p,{zoom,selected:selectedMonsterSpawn});
+  if(interactionMarkers)drawInteractionMarkers(ctx,p,{zoom,selected});
   if(markers){ctx.save();ctx.lineWidth=2/zoom;ctx.strokeStyle='#c7ef89';ctx.beginPath();ctx.arc(p.spawn.x,p.spawn.y,18,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#e5ffbe';ctx.font=`${12/zoom}px system-ui`;ctx.fillText('Spawn',p.spawn.x+22,p.spawn.y);for(const w of p.warps){ctx.strokeStyle='#b99cff';ctx.beginPath();ctx.arc(w.x,w.y,w.radius,0,Math.PI*2);ctx.stroke();ctx.fillText(w.id+' → '+w.to,w.x+w.radius,w.y)}ctx.restore()}ctx.restore();
  }
 }
@@ -266,6 +308,7 @@ export class DarkinMapPlayer{
  static async load(data,resolve=src=>src){const p=structuredClone(validateMap(data.format==='darkin-map-bundle-v1'?data.project:data)),images=new Map();await Promise.all(Object.entries(p.assets).map(async([id,s])=>{const img=new Image();img.crossOrigin='anonymous';await new Promise((ok,no)=>{img.onload=ok;img.onerror=()=>no(Error('Không tải được ảnh map '+id));img.src=resolve(s.src)});images.set(id,img)}));return new DarkinMapPlayer(p,images)}
  constructor(p,images){this.project=p;this.renderer=new MapRenderer(p,images);this.actor={...p.spawn,radius:12};this.time=0}
  getMonsterSpawns(options){return monsterSpawnDefinitions(this.project,options)}
- update(dt,dx=0,dy=0){this.time+=Math.max(0,dt);moveActor(this.project,this.actor,dx,dy,dt);return warpAt(this.project,this.actor.x,this.actor.y)}
+ getInteractions(options){return interactionDefinitions(this.project,options)}
+ update(dt,dx=0,dy=0,walkOptions={}){this.time+=Math.max(0,dt);moveActor(this.project,this.actor,dx,dy,dt,180,walkOptions);return warpAt(this.project,this.actor.x,this.actor.y)}
  draw(ctx,width,height,{zoom=1,...opts}={}){const p=this.project,x=Math.max(0,Math.min(p.cols*p.cell-width/zoom,this.actor.x-width/zoom/2)),y=Math.max(0,Math.min(p.rows*p.cell-height/zoom,this.actor.y-height/zoom/2));this.renderer.draw(ctx,{...opts,x,y,zoom,width,height,actor:this.actor,time:this.time})}
 }

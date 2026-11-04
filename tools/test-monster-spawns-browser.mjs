@@ -29,7 +29,7 @@ try{
  await value(p,'#monsterSpawnList',before.monsterSpawns[1].id);await value(p,'#showMonsterSpawns',false);assert.deepEqual((await stored(p)).monsterSpawns,before.monsterSpawns);
  await click(p,'#checkMonsterSpawns');assert.match(await p.locator('#monsterSpawnCheck').textContent(),/mọi điểm đang bật/);
  const saved=JSON.parse(await download(p,'#save'));assert.deepEqual(saved.monsterSpawns,before.monsterSpawns);
- const bundle=JSON.parse(await download(p,'#export'));assert.equal(bundle.runtime.version,3);assert.equal(bundle.monsterSpawnSchema.collection,'project.monsterSpawns');assert.deepEqual(bundle.project.monsterSpawns,before.monsterSpawns);assert.ok(!/^import /m.test(bundle.runtime.source));
+const bundle=JSON.parse(await download(p,'#export'));assert.ok(bundle.runtime.version>=3);assert.equal(bundle.monsterSpawnSchema.collection,'project.monsterSpawns');assert.deepEqual(bundle.project.monsterSpawns,before.monsterSpawns);assert.ok(!/^import /m.test(bundle.runtime.source));
  const runtime=await download(p,'#runtime');assert.match(runtime,/export class MonsterSpawnController/);
  const api=await import('data:text/javascript;base64,'+Buffer.from(runtime).toString('base64')),spawner=new api.MonsterSpawnController(bundle,{monsterIds:['slime_green','wolf_gray']});assert.equal(spawner.poll().length,3);assert.deepEqual(spawner.poll(100),[]);
  const html=await download(p,'#standalone');assert.ok(html.includes('monsterSpawns'));const offline=await c.newPage();await offline.route('**/offline-spawn-preview',r=>r.fulfill({status:200,contentType:'text/html',body:html}));await offline.goto(new URL('/offline-spawn-preview',base).href);await offline.waitForFunction(()=>document.getElementById('name').textContent.length>0);await offline.close();

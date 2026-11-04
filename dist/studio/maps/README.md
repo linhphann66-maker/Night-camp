@@ -1,5 +1,21 @@
 # Map Studio v1
 
+## Vật thể tương tác / linh thạch (runtime version 4)
+
+Chọn vật thể đã đặt → **Cấu hình tương tác vật thể**, hoặc **☰ → Tương tác &
+linh thạch**. Đổi ID riêng trong map, bật tương tác, chọn Đào/Thu thập/Tùy chỉnh,
+chỉnh khoảng cách, thời gian thao tác, lượng nhận và thời gian tái xuất hiện.
+Các bản sao cùng ảnh cấu hình độc lập; đồ cũ không tự thành tài nguyên.
+
+Xuất **nguyên map bundle** để thay map trong game mới, không xuất từng vật thể.
+ID đi cùng `project.objects[].id`; game dùng cặp mapId + objectId. Bundle có
+interactionSchema mô tả cách đọc. Chạy thử/HTML offline có nút thao tác, rung,
+ẩn/hồi node và lượng nhận mô phỏng; không ghi tiền thật hoặc trạng thái đào vào map.
+
+Đọc [hướng dẫn và prompt tích hợp game](INTERACTIONS-CODEX.md), hoặc tải prompt
+ngay trong mục tương tác. Dùng map-runtime.mjs v4; server của game mới cần tự
+xác thực thao tác và xử lý ví Linh thạch atomic/idempotent, không tin số tiền client.
+
 ## Điểm sinh quái (runtime version 3)
 
 Vào **☰ → Điểm sinh quái** để đặt, kéo, đổi ID, mã quái, số lượng, bán kính

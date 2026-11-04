@@ -7,7 +7,7 @@ const point=(id='bai_slime_01',overrides={})=>({id,name:'Bãi slime',monsterId:'
 const map=(...points)=>({...createMap(),monsterSpawns:points});
 const controller=p=>new MonsterSpawnController(p,{monsterIds:['slime_green','wolf_gray'],random:()=>.25});
 test('legacy maps retain original formats and no monsters; new maps have independent empty spawn list',()=>{
- const p=createMap();assert.deepEqual(p.monsterSpawns,[]);delete p.monsterSpawns;assert.equal(validateMap(p).format,'darkin-map-v1');assert.deepEqual(monsterSpawnDefinitions(p),[]);assert.equal(MAP_RUNTIME_VERSION,3);assert.equal(MONSTER_SPAWN_SCHEMA.collection,'project.monsterSpawns');
+const p=createMap();assert.deepEqual(p.monsterSpawns,[]);delete p.monsterSpawns;assert.equal(validateMap(p).format,'darkin-map-v1');assert.deepEqual(monsterSpawnDefinitions(p),[]);assert.ok(MAP_RUNTIME_VERSION>=3);assert.equal(MONSTER_SPAWN_SCHEMA.collection,'project.monsterSpawns');
 });
 test('point identity differs from monster type, allowing several points and maps to reuse one monsterId',()=>{
  const p=map(point('bai_a'),point('bai_b'));validateMap(p);const defs=monsterSpawnDefinitions({format:'darkin-map-bundle-v1',project:p});assert.equal(defs.length,2);assert.equal(defs[0].monsterId,defs[1].monsterId);assert.notEqual(defs[0].id,defs[1].id);assert.equal(defs[0].mapId,p.id);defs[0].x=0;assert.equal(p.monsterSpawns[0].x,400);

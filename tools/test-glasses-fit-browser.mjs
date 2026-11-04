@@ -32,7 +32,7 @@ try{
  const eyeOnly=fitLibraryGlasses(raw,entry,project.parts.head,undefined,{mode:'eyes'});assert.ok(project.attachments[0].w>eyeOnly.w*1.1&&project.attachments[0].w<raw.w*.85);await p.locator('#bones').uncheck();await p.waitForTimeout(70);await p.screenshot({path:'/tmp/glasses-round-fixed.png'});
  await value(p,'#accessoryCategory','hat');await value(p,'#accessoryCatalog','hat_paladin',null);await click(p,'#addAccessory');
  await p.waitForFunction(()=>JSON.parse(localStorage.getItem('nightcamp.cutout.v1')).attachments?.length===2);project=await stored(p);
- const hat=structuredClone(project.attachments[1]),custom={...makeAttachment(entry,hw),sourceId:'my-own-glasses.png',name:'custom glasses',src:'data:image/png;base64,'+(await fs.readFile(path.join(root,'dist-full/game-20261025-1758',entry.sprite.src))).toString('base64')};
+ const hat=structuredClone(project.attachments[1]),custom={...makeAttachment(entry,hw),sourceId:'my-own-glasses.png',name:'custom glasses',category:'glasses',visible:false,src:'data:image/png;base64,'+(await fs.readFile(path.join(root,'dist-full/game-20261025-1758',entry.sprite.src))).toString('base64')};
  const old=structuredClone(project);Object.assign(old.attachments[0],{w:raw.w,h:raw.h,rotation:0,x:0,y:0});old.attachments.push(custom);
  await p.locator('#projectFile').setInputFiles({name:'oversized-old-glasses.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(old))});
  await p.waitForFunction(w=>JSON.parse(localStorage.getItem('nightcamp.cutout.v1')).attachments[0].w===w,raw.w);

@@ -5,7 +5,7 @@ const NC={ASSET_MANIFEST:{},SPR:{},FX:{def(){}},rand:(a,b)=>(a+b)/2};
 const context=vm.createContext({NC,window:{NC},document:{createElement:()=>({getContext:()=>({})})}});
 for(const file of ['assets/petrig.manifest.js','js/petrig.js'])vm.runInContext(fs.readFileSync(new URL(file,base),'utf8'),context);
 Object.assign(NC.SPR,NC.ASSET_MANIFEST_PETRIG);
-const names={wolf:'Sói',falcon:'Chim ưng',wyvern:'Rồng nhỏ Wyvern',lantern:'Tinh linh đèn lồng',pp_axe:'Rối cầm rìu',pp_shield:'Rối cầm khiên',pp_xbow:'Rối cầm nỏ'};
+const names={wolf:'Sói',falcon:'Chim ưng',wyvern:'Tiểu phi long',lantern:'Tinh linh đèn lồng',pp_axe:'Rối cầm rìu',pp_shield:'Rối cầm khiên',pp_xbow:'Rối cầm nỏ'};
 const round=v=>Math.round(v*1e6)/1e6,TAU=Math.PI*2;
 const rigs={};
 for(const [id,R]of Object.entries(NC.PetRig.RIGS)){

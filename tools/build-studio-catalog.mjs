@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import {accessoryName} from '../dist/studio/names-vi.mjs';
 const root = path.resolve(import.meta.dirname, '..');
 const base = path.join(root, 'dist-full/game-20261025-1758');
 const accessoriesOnly=process.argv.includes('--accessories-only');
@@ -37,7 +38,7 @@ for(const [id,s]of Object.entries(allSprites)){
  const entry={id,name:item?.name||id,category,sprite:s,fit:item?.fit??s.wear?.fit??1.3,seat:item?.seat??s.wear?.seat??0,dx:item?.dx??0,grip:item?.grip??s.grip??.2,wtype:item?.wtype||'sword'};
  const fitId=item?.id||id,authored=category==='hat'&&(hatFits[fitId]||hatFits[id]);
  if(authored){for(const key of ['dx','seat','fit','clip'])if(authored[key]!==undefined)entry[key]=authored[key];entry.hatFitId=hatFits[fitId]?fitId:id}
- accessories.push(entry);
+ entry.originalName=entry.name;entry.name=accessoryName(entry);accessories.push(entry);
 }
 fs.writeFileSync(path.join(root,'dist/studio/accessories.json'),JSON.stringify(accessories));
 console.log('Accessories: '+accessories.length+' (includes headphones: '+accessories.some(a=>/headphones/.test(a.id))+')');

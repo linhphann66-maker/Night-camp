@@ -1,5 +1,6 @@
 import {measureOutfitImage} from './outfit-measure.mjs';
 import {fitOutfitPart} from './outfit-fit.mjs';
+import {outfitName} from './names-vi.mjs';
 
 export function mountOutfitFit({catalog,project,image}){
  let enabled=true,reference='',mode='template',panels=[];
@@ -15,7 +16,7 @@ export function mountOutfitFit({catalog,project,image}){
   if(!rigs.includes(reference))reference=rigs.includes(project()?.rig)?project().rig:rigs.includes('traveler')?'traveler':rigs[0]||'';
   for(const panel of panels){
    const select=panel.querySelector('.outfit-reference');
-   select.replaceChildren(...rigs.map(id=>new Option(id,id)));select.value=reference;select.disabled=!enabled;
+   select.replaceChildren(...rigs.map(id=>new Option(outfitName(id),id)));select.value=reference;select.disabled=!enabled;
    panel.querySelector('input').checked=enabled;
    panel.querySelector('.outfit-mode').value=mode;panel.querySelector('.outfit-mode').disabled=!enabled;
   }
@@ -29,7 +30,7 @@ export function mountOutfitFit({catalog,project,image}){
   panels.push(node);sync();return node;
  }
  const main=panel('outfitFit');document.getElementById('resources').before(main);
- main.insertAdjacentHTML('beforeend','<button id="refitOutfit" type="button">Căn lại 6 bộ phận đang mở</button><a href="fit-test.html" target="_blank" rel="noopener">Mở bản test so với talon ↗</a>');
+ main.insertAdjacentHTML('beforeend','<button id="refitOutfit" type="button">Căn lại 6 bộ phận đang mở</button><a href="fit-test.html" target="_blank" rel="noopener">Mở bản test so với Chiến binh vuốt nhọn ↗</a>');
  return {
   refresh(preferred){
    if(preferred!==undefined){

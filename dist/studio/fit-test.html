@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test tỷ lệ · Tiên tộc & Talon</title><link rel="stylesheet" href="fit-test.css"></head>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Thử tỷ lệ · Tiên tộc & bộ chuẩn</title><link rel="stylesheet" href="fit-test.css"></head>
 <body><main>
-<header><a href="./">← Về Studio</a><span>CUTOUT / KIỂM TRA TỶ LỆ</span><h1>Tiên tộc & Talon</h1><p>So sánh cùng góc nhìn, cùng thước và cùng animation. Ảnh tiên tộc được tách và căn tự động bằng đúng bộ xử lý của Studio, không chỉnh tay các bộ phận.</p></header>
+<header><a href="./">← Về Studio</a><span>CUTOUT / KIỂM TRA TỶ LỆ</span><h1>Tiên tộc & bộ chuẩn</h1><p>Đối chiếu với trang phục Chiến binh vuốt nhọn, cùng góc nhìn, cùng thước và cùng animation. Ảnh tiên tộc được tách và căn tự động bằng đúng bộ xử lý của Studio, không chỉnh tay các bộ phận.</p></header>
 <section class="controls" aria-label="Điều khiển bản test">
  <label>Chuyển động<select id="testAnimation"><option value="idle">Đứng · idle</option><option value="walk">Đi · walk</option><option value="run">Chạy · run</option><option value="attack">Đánh</option></select></label>
  <button id="testPlay">▶ Phát</button><button id="testReset">Về frame đầu</button>
@@ -9,12 +9,12 @@
  <label>Zoom<input id="testZoom" type="range" min=".6" max="1.5" value="1" step=".05"></label>
  <label class="check"><input id="testBefore" type="checkbox"> Xem thêm cách căn cũ</label>
 </section>
-<p id="testStatus" role="status">Đang tải talon và ảnh mẫu…</p>
+<p id="testStatus" role="status">Đang tải bộ chuẩn và ảnh mẫu…</p>
 <section class="comparison">
  <article><h2>Tiên tộc · bản sửa</h2><p>Khớp rộng/cao và mốc cổ</p><canvas id="testFitted" aria-label="Nhân vật tiên tộc được căn tự động"></canvas></article>
- <article><h2>Talon · bộ chuẩn</h2><p>Giữ nguyên asset gốc</p><canvas id="testOriginal" aria-label="Nhân vật talon gốc để đối chiếu"></canvas></article>
+ <article><h2>Bộ chuẩn</h2><p>Chiến binh vuốt nhọn</p><canvas id="testOriginal" aria-label="Chiến binh vuốt nhọn gốc để đối chiếu"></canvas></article>
  <article id="beforeCard" hidden><h2>Tiên tộc · cách căn cũ</h2><p>Chỉ giữ chiều dài; cổ theo đáy tóc</p><canvas id="testLegacy" aria-label="Cách căn cũ để so sánh"></canvas></article>
 </section>
-<section class="details"><h2>Số đo sau khi tự căn</h2><p>Đơn vị rig, đo phần ảnh có nét, không tính viền trong suốt. Với đầu, so đỉnh đầu → cổ thay vì tính cả tóc dài phía dưới cổ.</p><div class="table-wrap"><table><thead><tr><th>Bộ phận</th><th>Tiên tộc</th><th>Talon</th><th>Sai lệch</th></tr></thead><tbody id="fitMetrics"></tbody></table></div><p id="faceReport"></p></section>
+<section class="details"><h2>Số đo sau khi tự căn</h2><p>Đơn vị rig, đo phần ảnh có nét, không tính viền trong suốt. Với đầu, so đỉnh đầu → cổ thay vì tính cả tóc dài phía dưới cổ.</p><div class="table-wrap"><table><thead><tr><th>Bộ phận</th><th>Tiên tộc</th><th>Bộ chuẩn</th><th>Sai lệch</th></tr></thead><tbody id="fitMetrics"></tbody></table></div><p id="faceReport"></p></section>
 <section class="details"><h2>Dùng thử trong Studio hoặc game</h2><div class="downloads"><button id="testProject" disabled>Tải project đã căn</button><button id="testBundle" disabled>Tải game-bundle</button><button id="testReload">Nạp lại ảnh mẫu</button></div><p>Project chứa đủ 6 ảnh và tọa độ khớp. Tải về rồi dùng “Mở project” trong Studio. Không ghi đè bản nháp hiện tại của bạn.</p><label>Hoặc chọn lại chính sprite sheet tiên tộc<input id="testFile" type="file" accept="image/png,image/webp,image/jpeg"></label><p class="muted">Bản test này dùng ảnh mẫu có 6 mảnh theo thứ tự trái → phải: đầu, thân, tay gần, tay xa, chân gần, chân xa. Với ảnh bố trí khác, dùng hộp tách ảnh trong Studio để chọn vai trò. Nhận diện mặt là ước lượng cục bộ, không phải mô hình AI hiểu mọi kiểu nhân vật; ảnh không đủ tin cậy sẽ dùng khung bao và vẫn có thể cần chỉnh neo.</p></section>
 </main><script>window.NC={SPR:{},ITEMS:{},clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),lerp:(a,b,t)=>a+(b-a)*t};</script><script src="github-config.js"></script><script src="runtime/anim.js"></script><script src="runtime/avatar.js"></script><script type="module" src="fit-test.mjs"></script></body></html>

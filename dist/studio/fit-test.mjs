@@ -29,7 +29,7 @@ function metric(part,s,m){
 }
 async function loadSheet(src){
  const mine=++loadId;ready=false;playing=false;time=0;$('testPlay').textContent='▶ Phát';
- $('testProject').disabled=$('testBundle').disabled=true;$('testStatus').textContent='Đang tách đúng 6 bộ phận và tự căn theo talon…';
+ $('testProject').disabled=$('testBundle').disabled=true;$('testStatus').textContent='Đang tách đúng 6 bộ phận và tự căn theo Chiến binh vuốt nhọn…';
  const img=await image(src),canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
  if(canvas.width*canvas.height>4194304)throw Error('Bản test nhận ảnh tối đa 4 triệu pixel; ảnh lớn hơn hãy dùng Studio');
  const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0);
@@ -56,8 +56,8 @@ async function loadSheet(src){
   return tr;
  });
  $('fitMetrics').replaceChildren(...rows);
- $('faceReport').textContent=measurements.head.face&&refMeasurements.head.face?'Đã tìm thấy vùng mặt ở cả ảnh tiên tộc và talon: đặt mốc cổ theo mặt, không theo đuôi tóc. Chiều cao toàn ảnh đầu vẫn có thể lớn hơn do tóc xõa xuống dưới cổ.':'Không đủ tin cậy để xác định mặt: dùng khung bao ảnh. Có thể cần chỉnh mốc cổ trong Studio.';
- ready=true;$('testProject').disabled=$('testBundle').disabled=false;$('testStatus').textContent='Sẵn sàng · Đã tự tách 6 mảnh · Khớp chuẩn talon · Không chỉnh tay kích thước/khớp';
+ $('faceReport').textContent=measurements.head.face&&refMeasurements.head.face?'Đã tìm thấy vùng mặt ở cả ảnh tiên tộc và bộ Chiến binh vuốt nhọn: đặt mốc cổ theo mặt, không theo đuôi tóc. Chiều cao toàn ảnh đầu vẫn có thể lớn hơn do tóc xõa xuống dưới cổ.':'Không đủ tin cậy để xác định mặt: dùng khung bao ảnh. Có thể cần chỉnh mốc cổ trong Studio.';
+ ready=true;$('testProject').disabled=$('testBundle').disabled=false;$('testStatus').textContent='Sẵn sàng · Đã tự tách 6 mảnh · Khớp chuẩn Chiến binh vuốt nhọn · Không chỉnh tay kích thước/khớp';
 }
 function render(){
  if(!ready)return;

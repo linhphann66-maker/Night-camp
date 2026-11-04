@@ -195,6 +195,24 @@ Nút khôi phục hàng loạt về cỡ 0,85 của bản cũ đã bỏ để kh
 chỉnh. Nút căn neo giữ nguyên cỡ vẫn dùng được cho ảnh riêng. Với kính có trang trí lệch, chỉnh neo tới cầu kính rồi tinh chỉnh
 Lệch X/Y. Project cũ không tự bị cắt ảnh hay ghi đè điểm neo đã chỉnh.
 
+**Đổi phụ kiện cùng loại:** mỗi nhóm mũ/tai nghe, kính, vũ khí và cánh chỉ có
+một món hiển thị. Thêm món B hoặc chọn B ở **Đang gắn trên nhân vật** sẽ bật B,
+ẩn món A cùng loại, không xóa A hay mất các chỉnh sửa. Chọn lại A sẽ dùng lại
+đúng cỡ/neo đã lưu. Thêm lại món thư viện đã có sẽ dùng lại nó, không tạo bản
+trùng. Bật **Hiện phụ kiện** cũng loại trừ các món cùng loại; bỏ chọn chỉ ẩn
+món đó và không tự bật món khác. Phân loại độc lập với xương/điểm gắn và giữ
+trong trường `category`. Project cũ đang chồng món sẽ giữ món hiển thị cuối
+cho mỗi nhóm; các món còn lại vẫn còn trong danh sách. Nhóm đã ẩn hết giữ ẩn.
+Các thao tác hỗ trợ Hoàn tác/Làm lại và giữ cờ ẩn khi lưu/xuất bundle.
+
+**Tên tiếng Việt:** Studio có tên Việt cho 49 trang phục, 493 phụ kiện và 7
+thú cưng cutout, gồm danh sách, thư viện, bộ chuẩn và tìm kiếm không dấu.
+Ảnh tải riêng có nhãn như “Mũ tải lên 1”; mã file gốc vẫn giữ ở `sourceId`.
+Tên bạn tự đặt được giữ. Mã rig, sprite, ID, đường dẫn và kênh animation không
+bị dịch/đổi; tên gốc của món thư viện còn ở `originalName`. Project cũ dùng
+tên mặc định Thái/mã file sẽ nhận tên hiển thị Việt, không đổi dữ liệu ảnh,
+kích thước hoặc khớp. Bảng tên nằm tại `dist/studio/names-vi.mjs`.
+
 **Tự căn mũ ôm đầu:** khi tải ảnh loại Mũ, có thể bật tự căn theo ba mốc ước
 lượng (trán/gáy/cằm). Bộ phân tích silhouette chạy trong trình duyệt, tìm vùng
 thân đặc để giảm ảnh hưởng tai/sừng/cánh; không dùng dịch vụ AI và không thể

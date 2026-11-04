@@ -6,6 +6,7 @@ import {createBlankPet,descendants,addPetBone,renamePetBone,renamePoseChannels,r
 import {createWingCatalog,prepareWingProject,balanceWingSizes} from '../wings.mjs';
 import {mountWingPreview} from '../wing-preview.mjs';
 import {mountWingImporter} from '../wing-import.mjs';
+import {PET_NAMES,petName} from '../names-vi.mjs';
 const wingMode=new URLSearchParams(location.search).get('mode')==='wings';
 const draftKey=wingMode?'nightcamp.wing.cutout.v1':'nightcamp.pet.cutout.v1';
 const terminology=text=>wingMode?text.replace(/thú cưng/gi,'cánh').replace(/pet/gi,'cánh'):text;
@@ -41,6 +42,7 @@ function busy(value){state.loading=value;document.querySelector('main').setAttri
 async function adopt(p){
  if(wingMode)p=prepareWingProject(p);
  validatePet(p);const version=++adoption,next=clone(p),images=new Map();
+ if(!wingMode&&PET_NAMES[next.id]&&(!next.name||next.name===catalog?.rigs[next.id]?.name||(next.id==='wyvern'&&next.name==='Rồng nhỏ Wyvern')))next.name=petName(next.id);
  busy(true);message('Đang tải '+next.name+'…');
  try{
  await Promise.all(next.spriteOrder.map(async id=>images.set(id,await image(next.sprites[id].src))));if(version!==adoption)return;
@@ -66,7 +68,7 @@ function setMode(mode){pause();drag=null;state.mode=mode;refit();renderAll();upd
 function commitRig(p,pose=state.pose){validatePet(p);checkpoint();state.project=p;const ids=new Set(p.bones.map(b=>b.id));state.pose=Object.fromEntries(Object.entries(pose).filter(([ch])=>ids.has(ch.split(':')[0])));if(!ids.has(state.bone))state.bone=p.bones[0].id;refit();renderAll();persist()}
 function openRigDialog(action){
  rigDialogAction=action;const b=selected();$('rigDialogTitle').textContent=terminology(action.kind==='blank'?'Tạo pet trống':action.kind==='rename'?'Đổi tên / ID xương':'Thêm xương');
- $('rigName').value=action.kind==='blank'?(wingMode?'Cánh mới':'Pet mới'):action.kind==='rename'?label(b):'Xương mới';
+ $('rigName').value=action.kind==='blank'?(wingMode?'Cánh mới':'Thú cưng mới'):action.kind==='rename'?label(b):'Xương mới';
  let id='bone_'+(state.project.bones.length+1);while(state.project.bones.some(b=>b.id===id))id+='_';$('rigId').value=action.kind==='blank'?(wingMode?'custom_wings':'custom_pet'):action.kind==='rename'?b.id:id;
  $('rigDialogHint').textContent=terminology(action.kind==='blank'?'Thay pet đang mở bằng project trắng. Lưu bản hiện tại trước nếu cần; có thể Hoàn tác.':action.kind==='rename'?'ID mới sẽ được cập nhật trong liên kết cha–con và tất cả animation.':'Xương không có ảnh ban đầu. Gán ảnh trong mục Khớp & ảnh bộ phận.');$('rigError').textContent='';$('rigDialog').showModal();
 }
@@ -113,7 +115,7 @@ $('deleteBoneInfo').insertAdjacentHTML('afterend','<p id="deleteBoneError" role=
 on('deleteBone','click',()=>{$('deleteBoneError').textContent='';$('deleteBoneInfo').textContent='Xương '+label(selected())+' · nhánh có '+descendants(state.project,state.bone).size+' xương. Xóa cấu trúc này trong toàn bộ project?';$('deleteBoneDialog').showModal()});
 on('cancelDeleteBone','click',()=>$('deleteBoneDialog').close());on('confirmDeleteBone','click',()=>{try{if(state.mode!=='rig')throw Error('Chuyển sang Dựng rig trước');commitRig(deletePetBone(state.project,state.bone,$('deleteScope').value==='tree'));$('deleteBoneDialog').close();message('Đã xóa xương và dọn kênh animation liên quan. Ảnh vẫn còn; có thể Hoàn tác.')}catch(error){$('deleteBoneError').textContent=error.message}});
 on('pet','change',async()=>{if(!catalog.rigs[$('pet').value])return;checkpoint();await adopt({...clone(catalog.rigs[$('pet').value]),activeClipId:'idle'});message('Đã mở '+state.project.name+' · cutout, không mesh')});
-on('clonePet','click',()=>{const id=prompt(terminology('ID pet mới (chữ Latin, số, _ hoặc -):'),wingMode?'custom_wings':'custom_pet');if(!id)return;mutate(p=>{p.id=id;p.name=terminology('Pet mới · ')+id});message('Đã tạo pet mới. Thay ảnh và chỉnh khớp rồi lưu project.')});
+on('clonePet','click',()=>{const id=prompt(terminology('ID pet mới (chữ Latin, số, _ hoặc -):'),wingMode?'custom_wings':'custom_pet');if(!id)return;mutate(p=>{p.id=id;p.name=wingMode?'Cánh mới':'Thú cưng mới'});message('Đã tạo pet mới. Thay ảnh và chỉnh khớp rồi lưu project.')});
 on('loadPreset','click',()=>{const id=$('preset').value,c=state.project.clips?.[id];if(!c)throw Error('Chọn clip trước');checkpoint();stash();state.project.activeClipId=id;state.project.clip=clone(c);selectKey(0);refit();renderAll();persist();message('Đã nạp '+c.name)});
 on('play','click',()=>{state.playing=!state.playing;if(state.time>=state.project.clip.dur)state.time=0;$('play').textContent=state.playing?'Ⅱ Dừng':'▶ Phát'});on('record','click',record);
 on('scrub','input',()=>{pause();state.time=Number($('scrub').value);state.key=state.project.clip.keys.reduce((best,k,i)=>Math.abs(k.t-state.time)<Math.abs(state.project.clip.keys[best].t-state.time)?i:best,0);state.pose=samplePet(state.project.clip,state.time);renderKeys();renderPose()});
@@ -212,6 +214,7 @@ let last=0;function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;if
 busy(true);safe(async()=>{
  source=await connectSource(!!window.STUDIO_GITHUB,new URL('../',import.meta.url));
  catalog=wingMode?createWingCatalog(source.catalog):await fetch(new URL('./catalog.json',import.meta.url)).then(r=>{if(!r.ok)throw Error('Không tải được danh mục pet');return r.json()});
+ if(!wingMode)for(const [id,p]of Object.entries(catalog.rigs))p.name=petName(id,p.name);
  if(wingMode)wingPreview=await mountWingPreview(image);
  const initial=wingMode?'custom_wings':'wolf';options($('pet'),Object.entries(catalog.rigs).map(([id,p])=>[id,p.name]));let p={...clone(catalog.rigs[initial]),activeClipId:'idle'};const saved=localStorage.getItem(draftKey);if(saved)try{p=validatePet(JSON.parse(saved))}catch{message('Nháp cũ không hợp lệ; mở khung mặc định')}
  await adopt(p);$('pet').value=catalog.rigs[p.id]?p.id:initial;message(source.warning||(wingMode?'Cánh trống · chọn khung hai bên hoặc mẫu Falcon, hoặc tự dựng xương.':'Sẵn sàng · 7 pet cutout · 29 chuyển động mẫu · chưa có mesh'));requestAnimationFrame(frame);

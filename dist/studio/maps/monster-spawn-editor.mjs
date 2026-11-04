@@ -4,6 +4,7 @@ export function mountMonsterSpawnEditor(h){
  panel.innerHTML=`<h2>Điểm sinh quái</h2><p class="hint">ID điểm phân biệt từng bãi. Mã quái (monsterId) phải trùng registry của game mới; không phải tên file ảnh. Nhiều điểm có thể dùng cùng mã quái.</p>
 <button id="newMonsterSpawn" class="primary">＋ Chạm map để đặt điểm mới</button><label>Điểm đang chọn<select id="monsterSpawnList"></select></label><p id="monsterSpawnSummary" class="hint"></p>
 <label>ID điểm sinh<input id="monsterSpawnId" maxlength="100" spellcheck="false"></label><label>Tên ghi chú<input id="monsterSpawnName" maxlength="100" placeholder="Bãi slime phía đông"></label><label>Mã quái (monsterId)<input id="monsterTypeId" maxlength="100" spellcheck="false" placeholder="slime_green"></label>
+<div class="pair"><label>Cấp quái<input id="monsterLevel" type="number" min="1" max="99" step="1" value="1"></label><label>Tỷ lệ hiển thị<input id="monsterScale" type="number" min="0.1" max="5" step="0.1" value="1"></label></div>
 <div class="pair"><label>X (tọa độ thế giới)<input id="monsterSpawnX" type="number" step="1"></label><label>Y (tọa độ thế giới)<input id="monsterSpawnY" type="number" step="1"></label></div>
 <div class="pair"><label>Bán kính sinh<input id="monsterSpawnRadius" type="number" min="0" max="1024" step="1"></label><label>Số quái tối đa<input id="monsterSpawnCount" type="number" min="1" max="50" step="1"></label></div>
 <label>Hồi sinh sau khi chết (giây)<input id="monsterRespawnSeconds" type="number" min="0" max="86400" step="1"></label><p class="hint">Bán kính 0 = đúng vị trí. Hồi sinh 0 = chỉ sinh đợt đầu, không hồi sinh. Số lượng là giới hạn quái sống + đang tạo, không tạo thêm mỗi frame.</p>
@@ -12,14 +13,14 @@ export function mountMonsterSpawnEditor(h){
  for(const [id,label]of [['monsterPlace','＋ Đặt điểm sinh quái'],['monsterSelect','◇ Chọn / kéo điểm quái'],['monsterErase','⌫ Xóa điểm sinh quái']])$('tool').add(new Option(label,id));
  let chosen=null,drag=null,draft={id:'',name:'',monsterId:'slime_green',x:160,y:160,radius:80,count:1,respawnSeconds:30,enabled:true};
  const rows=()=>h.state.project?.monsterSpawns||[],current=()=>rows().find(s=>s.id===chosen),nextId=()=>{let n=1;while(rows().some(s=>s.id==='mob_spawn_'+String(n).padStart(2,'0')))n++;return 'mob_spawn_'+String(n).padStart(2,'0')};
- const fields={monsterSpawnId:'id',monsterSpawnName:'name',monsterTypeId:'monsterId',monsterSpawnX:'x',monsterSpawnY:'y',monsterSpawnRadius:'radius',monsterSpawnCount:'count',monsterRespawnSeconds:'respawnSeconds',monsterSpawnEnabled:'enabled'};
+ const fields={monsterSpawnId:'id',monsterSpawnName:'name',monsterTypeId:'monsterId',monsterLevel:'level',monsterScale:'scale',monsterSpawnX:'x',monsterSpawnY:'y',monsterSpawnRadius:'radius',monsterSpawnCount:'count',monsterRespawnSeconds:'respawnSeconds',monsterSpawnEnabled:'enabled'};
  const on=(id,event,fn)=>$(id).addEventListener(event,h.safe(fn)),bound=(v,max)=>Math.round(Math.max(0,Math.min(max-1,v)));
  function read(){return Object.fromEntries(Object.entries(fields).map(([id,key])=>[key,key==='enabled'?$(id).checked:['id','name','monsterId'].includes(key)?$(id).value.trim():$(id).valueAsNumber]))}
  function assertIdle(){if(drag)throw Error('Thả điểm sinh quái đang kéo trước khi sửa/lưu map')}
- function commit(s){const old=chosen;chosen=s.id;try{h.update(p=>{const i=p.monsterSpawns?.findIndex(v=>v.id===old)??-1;if(i>=0)p.monsterSpawns[i]=s;else(p.monsterSpawns||=[]).push(s)})}catch(e){chosen=old;throw e}refresh()}
+ function commit(s){const old=chosen;chosen=s.id;try{h.update(p=>{const i=p.monsterSpawns?.findIndex(v=>v.id===old)??-1;if(i>=0)p.monsterSpawns[i]=s;else(p.monsterSpawns||=[]).push(s)})}catch(e){chosen=old;throw e}refresh();h.message('Đã cập nhật điểm sinh '+s.id+' · '+s.monsterId)}
  function refresh(){if(!h.state.project)return;if(chosen&&!current())chosen=null;if(!draft.id)draft.id=nextId();
   $('monsterSpawnList').replaceChildren(new Option('— Chọn điểm / tạo điểm mới —',''),...rows().map(s=>new Option((s.enabled?'● ':'○ ')+s.id+' → '+s.monsterId+' ×'+s.count,s.id)));$('monsterSpawnList').value=chosen||'';
-  const s=current()||draft;for(const [id,key]of Object.entries(fields)){if(key==='enabled')$(id).checked=s[key];else $(id).value=s[key]}
+  const s=current()||draft;for(const [id,key]of Object.entries(fields)){if(key==='enabled')$(id).checked=s[key];else $(id).value=s[key]??(['level','scale'].includes(key)?1:'')}
   $('monsterSpawnSummary').textContent=rows().length+'/256 điểm · '+rows().filter(s=>s.enabled).reduce((n,s)=>n+s.count,0)+' quái tối đa đang bật. ID điểm chỉ duy nhất trong map; game dùng mapId + ID điểm.';
   for(const id of ['editMonsterSpawn','focusMonsterSpawn','duplicateMonsterSpawn','deleteMonsterSpawn'])$(id).disabled=!current()||h.state.busy;
  }
@@ -42,5 +43,5 @@ export function mountMonsterSpawnEditor(h){
  cv.addEventListener('pointermove',h.safe(e=>{if(!drag||drag.pointer!==e.pointerId)return;e.preventDefault();e.stopImmediatePropagation();const p=h.state.project,[x,y]=h.world(e),s=p.monsterSpawns.find(s=>s.id===drag.id);s.x=bound(x+drag.dx,p.cols*p.cell);s.y=bound(y+drag.dy,p.rows*p.cell);refresh()}),true);
  for(const event of ['pointerup','pointercancel','lostpointercapture'])cv.addEventListener(event,h.safe(e=>{if(!drag||drag.pointer!==e.pointerId)return;e.stopImmediatePropagation();const before=drag.before;drag=null;if(event==='pointercancel'){h.state.project=h.restoreSnapshot(before);h.state.renderer.project=h.state.project}else{validateMap(h.state.project);h.remember(before);h.persist()}refresh()}),true);
  $('tool').addEventListener('change',h.safe(()=>{if($('tool').value==='monsterPlace')begin()}));
- return {refresh,assertIdle,onTab:id=>{if(id==='monsters')focus(current()||rows()[0])},selected:()=>chosen,visible:()=>$('showMonsterSpawns').checked};
+ return {refresh,assertIdle,onTab:id=>{if(id==='monsters')focus(current()||rows()[0])},selected:()=>chosen,visible:()=>$('showMonsterSpawns').checked,chooseTemplate:m=>{h.assertIdle();h.stop();const s=current();h.update(p=>{(p.monsterTypes||={})[m.id]=structuredClone(m);if(s)p.monsterSpawns.find(v=>v.id===s.id).monsterId=m.id});if(!s)draft.monsterId=m.id;refresh();h.message('Đã chọn '+m.name+' · '+m.id+'. Đặt điểm mới hoặc tiếp tục chỉnh điểm đang chọn.')}};
 }

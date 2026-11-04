@@ -1,5 +1,17 @@
 # Map Studio v1
 
+## Thư viện quái gốc (runtime version 6)
+
+Vào **☰ → Điểm sinh quái** để chọn trong 432 mẫu quái Night Camp, xem ảnh
+đứng/tấn công và chỉ số theo cấp, gắn vào bãi đã chọn hoặc đặt bãi mới. Có cấp,
+tỷ lệ, số lượng, bán kính và hồi sinh. Nút Nhúng dữ liệu quái gốc bổ sung mẫu
+cho các bãi cũ theo đúng monsterId, không tự đổi ID hoặc đè mẫu đã chỉnh.
+
+Chạy thử có quái hiển thị, di chuyển cơ bản, đánh thử/hạ và hồi sinh; không
+cộng tiền/EXP, không phải toàn bộ AI/chiến đấu gốc. Xuất nguyên map bundle
+kèm `monsterTypes` và ảnh của loại đang dùng; cập nhật runtime v6 ở game mới.
+Đọc [hướng dẫn và prompt tích hợp](MONSTER-SPAWNS.md).
+
 ## Nhà & đồ trang trí gốc (runtime version 5)
 
 Vào **☰ → Vật thể & trang trí**, chọn nhóm **Nhà & công trình**, **Lều & đồ

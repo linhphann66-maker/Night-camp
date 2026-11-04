@@ -3,10 +3,10 @@
 import {NATIVE_GROUNDS,NATIVE_MAPS,NATIVE_GROUND_BUILD} from './native-ground.mjs';
 export {NATIVE_GROUNDS,NATIVE_MAPS,NATIVE_GROUND_BUILD};
 export const TERRAINS={grass:{name:'Cỏ',color:'#76aa5e'},dirt:{name:'Đất / đường',color:'#cdaa76'},stone:{name:'Đá lát',color:'#92929a'},sand:{name:'Cát',color:'#dcc08c'},water:{name:'Nước',color:'#5caccf'},moss:{name:'Rêu / cỏ tối',color:'#567e64'}};
-export const MAP_RUNTIME_VERSION=5;
+export const MAP_RUNTIME_VERSION=6;
 export const MAP_OBJECT_KINDS=Object.freeze(['tree','rock','bush','low','bridge','custom','ground','house','tall','post','fence','seat','fire']);
 export const MAP_INTERACTION_SCHEMA=Object.freeze({version:1,collection:'project.objects[].interaction',identity:'mapId + object.id; IDs belong to this map, not separate object packs',actionId:'Shared handler ID; many objects may use mine_spirit_stone',range:'World units from player feet to object-local interaction.point after scale/rotation/flip',reward:'resourceId + inclusive integer min/max; spirit_stone is Linh thạch',respawnSeconds:'Seconds after successful collection; 0 means no respawn',runtime:'interactionDefinitions, nearestInteraction. InteractionSimulator is PREVIEW ONLY: not an authoritative currency or multiplayer system. Game server must validate channeling and atomically credit wallet once + deplete the node.'});
-export const MONSTER_SPAWN_SCHEMA=Object.freeze({version:1,collection:'project.monsterSpawns',pointId:'id',monsterTypeId:'monsterId',identity:'mapId + spawnId',coordinates:'World XY at monster feet, same units/origin as project.spawn; not cells or screen pixels',count:'Maximum alive + pending per point',respawnSeconds:'Seconds after death; 0 means no respawn',registry:'Game must map monsterId to its own template/assets/AI. Never infer type from spawn point ID or image filename.',runtime:'MonsterSpawnController: poll(dt) -> requests; confirm(instanceId) on creation, reject on failure, markDead on death. Use one authoritative controller per map instance on server; offline can run locally.'});
+export const MONSTER_SPAWN_SCHEMA=Object.freeze({version:2,templates:'project.monsterTypes[monsterId]: optional embedded native data, poses and balance; game owns AI/rewards',level:'optional 1–99, default 1',scale:'optional 0.1–5, default 1; apply to art and foot radius',collection:'project.monsterSpawns',pointId:'id',monsterTypeId:'monsterId',identity:'mapId + spawnId',coordinates:'World XY at monster feet, same units/origin as project.spawn; not cells or screen pixels',count:'Maximum alive + pending per point',respawnSeconds:'Seconds after death; 0 means no respawn',registry:'Game must map monsterId to its own template/assets/AI. Never infer type from spawn point ID or image filename.',runtime:'MonsterSpawnController: poll(dt) -> requests; confirm(instanceId) on creation, reject on failure, markDead on death. Use one authoritative controller per map instance on server; offline can run locally.'});
 const safeId=id=>typeof id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(id)&&!['__proto__','constructor','prototype'].includes(id);
 const finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
 export const DEFAULT_LIGHTING=Object.freeze({mode:'day',hour:22,ambient:1,vignette:true,playerLight:true,blend:true,details:true});
@@ -31,7 +31,7 @@ export function validateMap(p){
  if(!p.spawn||!finite(p.spawn.x,0,p.cols*p.cell)||!finite(p.spawn.y,0,p.rows*p.cell))fail('Điểm xuất hiện nằm ngoài map');
  if(!Array.isArray(p.warps)||p.warps.length>200)fail('Danh sách cửa map không hợp lệ');
  const warps=new Set();for(const w of p.warps){if(!safeId(w.id)||warps.has(w.id)||!safeId(w.to)||!safeId(w.at)||!finite(w.x,0,p.cols*p.cell)||!finite(w.y,0,p.rows*p.cell)||!finite(w.radius,8,500))fail('Cửa chuyển map không hợp lệ');warps.add(w.id)}
- validateMonsterSpawns(p);
+ validateMonsterTypes(p);validateMonsterSpawns(p);
  return p;
 }
 export function createMap({id='custom_map',name='Map mới',cols=32,rows=24,cell=64,seed=7,terrain='grass'}={}){return validateMap({format:'darkin-map-v1',id,name,cols,rows,cell,seed,assets:{},terrain:Array(cols*rows).fill(terrain),blocked:Array(cols*rows).fill(0),walkable:Array(cols*rows).fill(0),objects:[],roads:[],monsterSpawns:[],spawn:{x:cell*2.5,y:cell*2.5},warps:[]})}
@@ -133,6 +133,7 @@ export function validateMonsterSpawns(p){
  const ids=new Set();let total=0;
  for(const s of p.monsterSpawns){
   if(!s||!safeId(s.id)||ids.has(s.id)||!safeId(s.monsterId)||typeof s.name!=='string'||s.name.length>100||typeof s.enabled!=='boolean'||!finite(s.x,0,p.cols*p.cell)||!finite(s.y,0,p.rows*p.cell)||s.x>=p.cols*p.cell||s.y>=p.rows*p.cell||!finite(s.radius,0,1024)||!Number.isInteger(s.count)||!finite(s.count,1,50)||!finite(s.respawnSeconds,0,86400))fail('Điểm sinh quái không hợp lệ: ID phải riêng, tọa độ trong map, 1–50 quái, bán kính 0–1024, hồi sinh 0–86400 giây');
+  if(s.level!==undefined&&(!Number.isInteger(s.level)||!finite(s.level,1,99))||s.scale!==undefined&&!finite(s.scale,.1,5))fail('Cấp quái 1–99; tỷ lệ quái 0.1–5');
   ids.add(s.id);total+=s.count;
  }
  if(total>1024)fail('Tổng giới hạn số quái tại các điểm không quá 1024 mỗi map');
@@ -165,7 +166,7 @@ export class MonsterSpawnController{
   try{for(const slot of this.slots){if(!['ready','waiting'].includes(slot.state)||slot.readyAt>this.time)continue;
    const s=slot.definition,pos=monsterSpawnPosition(this.project,s,this.options);if(!pos){slot.readyAt=this.time+1;continue}
    const instanceId=this.project.id+':'+s.id+':'+slot.slot+':'+(++slot.sequence);slot.state='pending';slot.instanceId=instanceId;this.instances.set(instanceId,slot);
-   requests.push({instanceId,mapId:this.project.id,spawnId:s.id,monsterId:s.monsterId,slot:slot.slot,...pos});
+   requests.push({instanceId,mapId:this.project.id,spawnId:s.id,monsterId:s.monsterId,slot:slot.slot,...pos,...(s.level!==undefined?{level:s.level}:{}),...(s.scale!==undefined?{scale:s.scale}:{})});
   }}catch(error){for(const r of requests)this.reject(r.instanceId);throw error}
   return requests;
  }
@@ -173,6 +174,54 @@ export class MonsterSpawnController{
  reject(instanceId){const s=this.instances.get(instanceId);if(!s||s.state!=='pending')return false;this.instances.delete(instanceId);s.instanceId=null;s.state='ready';s.readyAt=this.time+1;return true}
  markDead(instanceId){const s=this.instances.get(instanceId);if(!s||s.state!=='alive')return false;this.instances.delete(instanceId);s.instanceId=null;s.state=s.definition.respawnSeconds>0?'waiting':'retired';s.readyAt=this.time+s.definition.respawnSeconds;return true}
  stats(){return this.slots.reduce((v,s)=>(v[s.state]=(v[s.state]||0)+1,v),{ready:0,pending:0,alive:0,waiting:0,retired:0})}
+}
+// Optional native templates travel with the map, separate from decorative assets.
+// Unknown/custom monsterId remains legal for existing game-owned registries.
+export function validateMonsterTypes(p){
+ if(p.monsterTypes===undefined)return;
+ if(!p.monsterTypes||Array.isArray(p.monsterTypes)||Object.keys(p.monsterTypes).length>1000)fail('Thư viện quái map không hợp lệ');
+ for(const[id,m]of Object.entries(p.monsterTypes)){
+  if(!safeId(id)||!m||m.id!==id||typeof m.name!=='string'||!m.name.trim()||m.name.length>150||!safeId(m.kind)||!['normal','elite','boss'].includes(m.category)||!m.native||!m.poses||!m.balance)fail('Mẫu quái không hợp lệ: '+id);
+  for(const pose of ['idle','attack']){const s=m.poses[pose];if(!s||!validSrc(s.src)||!finite(s.w,1,4096)||!finite(s.h,1,4096)||!finite(s.ax,0,1)||!finite(s.ay,0,1))fail('Ảnh/tỷ lệ quái không hợp lệ: '+id)}
+  for(const key of ['hpK','atkK','defK','mdefK','agiK','dexK','expK'])if(!finite(m.native[key],0,100000))fail('Chỉ số quái không hợp lệ: '+id);
+  for(const[key,min,max]of [['r',1,256],['spd',0,10000],['hover',0,1000],['hue',-3600,3600],['seeThrough',0,1]])if(m.native[key]!==undefined&&!finite(m.native[key],min,max))fail('Dữ liệu hiển thị/quy mô quái không hợp lệ: '+id);
+  const b=m.balance;if(!Array.isArray(b.hpAnchors)||b.hpAnchors.length<2||b.hpAnchors.length>100||b.hpAnchors.some((a,i)=>!Array.isArray(a)||a.length!==2||!finite(a[0],1,99)||!finite(a[1],1,1e9)||i>0&&a[0]<=b.hpAnchors[i-1][0])||!finite(b.hpStep,1,1e6)||!finite(b.jobRatio,0,100)||!b.reward||!finite(b.reward.flat,0,1e6)||!finite(b.reward.perLevel,0,1e6)||!finite(b.reward.divisor,1,1e6)||b.boss&&(!finite(b.boss.lv,1,99)||!finite(b.boss.hp,1,1e9)))fail('Đường cong chỉ số quái không hợp lệ: '+id);
+ }
+}
+export function nativeMonsterStats(m,level=1){
+ if(!Number.isInteger(level)||!finite(level,1,99))fail('Cấp quái phải từ 1–99');
+ const M=m.native,b=m.balance,L=level,legacy=lv=>40+6*lv+.15*lv*lv;let base=b.hpAnchors.at(-1)[1];
+ for(let i=1;i<b.hpAnchors.length;i++){const[l0,h0]=b.hpAnchors[i-1],[l1,h1]=b.hpAnchors[i];if(L<=l1){base=Math.round((h0+(h1-h0)*(L-l0)/(l1-l0))/b.hpStep)*b.hpStep;break}}
+ const hp=b.boss?b.boss.hp*legacy(L)/legacy(b.boss.lv):M.hpCurve==='chest'?M.hpK*legacy(L):M.hpK*base,a=M.atkK*(6+2.2*L),exp=Math.max(1,Math.round((b.reward.flat+L*b.reward.perLevel)/b.reward.divisor*M.expK));
+ return {lv:L,name:M.name,element:M.element,atkElement:M.atkElement,maxHp:Math.max(1,Math.round(hp)),atk:[Math.round(a*.8),Math.round(a*1.2)],def:Math.min(60,Math.round(M.defK*L*.4)),vdef:Math.round(M.defK*L*.3),mdef:Math.min(60,Math.round(M.mdefK*L*.3)),imdef:Math.round(L*.2),hit:Math.round(L+L*M.dexK),flee:Math.round(L+L*M.agiK),exp,jexp:Math.max(1,Math.round(exp*b.jobRatio))};
+}
+export async function loadMonsterImages(p,resolve=src=>src){
+ const images=new Map(),sources=[...new Set(Object.values(p.monsterTypes||{}).flatMap(m=>Object.values(m.poses).map(s=>s.src)))];
+ await Promise.all(sources.map(async src=>{const img=new Image();img.crossOrigin='anonymous';await new Promise((ok,no)=>{img.onload=()=>img.naturalWidth*img.naturalHeight<=16777216?ok():no(Error('Ảnh quái quá lớn'));img.onerror=()=>no(Error('Không tải được ảnh quái'));img.src=resolve(src)});images.set(src,img)}));return images;
+}
+export function drawMonsterSprite(ctx,m,e,images,{labels=true}={}){
+ const s=m.poses[e.attack>0?'attack':'idle'],img=images.get(s.src);if(!img)return;
+ const time=e.time||0,kind=m.native.base||m.kind,scale=e.scale??1,z=kind==='fly'?(m.native.hover||40)+Math.sin(time*3)*4:kind==='hop'?Math.abs(Math.sin(time*4))*6:Math.sin(time*3)*1.5;
+ ctx.save();ctx.translate(e.x,e.y);ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(0,0,Math.min(80,s.w*.3)*scale,8*scale,0,0,Math.PI*2);ctx.fill();ctx.save();ctx.translate(0,-z*scale);ctx.scale((e.face>0?-1:1)*scale,scale);if(m.native.hue!==undefined)ctx.filter=`hue-rotate(${m.native.hue}deg) saturate(1.25) brightness(1.05)`;ctx.globalAlpha=m.native.seeThrough??1;if(e.hit>0)ctx.globalAlpha*=.6;ctx.drawImage(img,-s.ax*s.w,-s.ay*s.h,s.w,s.h);ctx.restore();
+ if(labels){const top=-s.h*scale-z*scale-10;ctx.font='12px system-ui';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#0b1520';ctx.fillStyle=m.category==='boss'?'#ffd478':'#eef1df';const text=m.name+' · Cấp '+(e.level||1);ctx.strokeText(text,0,top-10);ctx.fillText(text,0,top-10);if(e.hp!==undefined){ctx.fillStyle='#171a28';ctx.fillRect(-28,top,56,5);ctx.fillStyle='#e1667d';ctx.fillRect(-28,top,56*Math.max(0,e.hp/e.maxHp),5)}}ctx.restore();
+}
+// LOCAL PREVIEW ONLY. No real loot, player damage, XP or persistent kill state.
+// Full original special AI (summons, projectiles, boss skills) remains game-owned.
+export class MonsterPreview{
+ constructor(p,{random=Math.random,walkOptions={}}={}){
+  this.project=p;this.entities=new Map();this.walkOptions=walkOptions;this.time=0;this.kills=0;this.attackCooldown=0;
+  const known=Object.keys(p.monsterTypes||{});this.missing=[...new Set((p.monsterSpawns||[]).filter(s=>s.enabled&&!known.includes(s.monsterId)).map(s=>s.monsterId))];
+  const preview={...p,monsterSpawns:(p.monsterSpawns||[]).filter(s=>known.includes(s.monsterId))};
+  this.controller=new MonsterSpawnController(preview,{monsterIds:known,random,actorRadius:0,canSpawn:(x,y,s)=>canWalk(p,x,y,Math.min(256,(p.monsterTypes[s.monsterId].native.r||12)*(s.scale||1)),this.walkOptions)});
+ }
+ update(dt,actor,{wander=true}={}){
+  dt=Math.max(0,Math.min(.1,dt));this.time+=dt;this.attackCooldown=Math.max(0,this.attackCooldown-dt);
+  for(const r of this.controller.poll(dt)){const m=this.project.monsterTypes[r.monsterId],stats=nativeMonsterStats(m,r.level||1);this.entities.set(r.instanceId,{...r,sx:r.x,sy:r.y,level:r.level||1,scale:r.scale||1,hp:stats.maxHp,maxHp:stats.maxHp,radius:Math.min(256,(m.native.r||12)*(r.scale||1)),time:0,face:-1,hit:0,attack:0});this.controller.confirm(r.instanceId)}
+  for(const e of this.entities.values()){e.time+=dt;e.hit=Math.max(0,e.hit-dt);e.attack=Math.max(0,e.attack-dt);if(!wander)continue;const m=this.project.monsterTypes[e.monsterId],n=m.native;let dx=Math.cos(e.time*.55+e.slot)*.6,dy=Math.sin(e.time*.43+e.slot)*.4,speed=Math.min(100,n.spd||50);if(actor&&e.angry&&Math.hypot(actor.x-e.x,actor.y-e.y)<(n.aggro||500)){dx=actor.x-e.x;dy=actor.y-e.y;speed=Math.min(200,n.spd||70);if(Math.hypot(dx,dy)<45){e.attack=.5;speed=0}}else if(Math.hypot(e.x-e.sx,e.y-e.sy)>140){dx=e.sx-e.x;dy=e.sy-e.y}if(Math.abs(dx)>.1)e.face=dx>0?1:-1;moveActor(this.project,e,dx,dy,dt,speed,this.walkOptions)}
+ }
+ target(actor,range=120){return [...this.entities.values()].filter(e=>Math.hypot(e.x-actor.x,e.y-actor.y)<=range+e.radius).sort((a,b)=>Math.hypot(a.x-actor.x,a.y-actor.y)-Math.hypot(b.x-actor.x,b.y-actor.y))[0]||null}
+ attack(actor){if(this.attackCooldown>0)return null;const e=this.target(actor);if(!e)return null;this.attackCooldown=.35;e.angry=true;e.hit=.25;const amount=Math.max(1,Math.ceil(e.maxHp/3));e.hp=Math.max(0,e.hp-amount);if(e.hp===0){this.entities.delete(e.instanceId);this.controller.markDead(e.instanceId);this.kills++}return {instanceId:e.instanceId,amount,killed:e.hp===0}}
+ drawables(images){return [...this.entities.values()].map(e=>({x:e.x,y:e.y,draw:ctx=>drawMonsterSprite(ctx,this.project.monsterTypes[e.monsterId],e,images)}))}
 }
 export function drawMonsterSpawnMarkers(ctx,p,{zoom=1,selected=null}={}){
  ctx.save();ctx.font=`${12/zoom}px system-ui`;ctx.lineWidth=1.5/zoom;
@@ -284,7 +333,7 @@ export class MapRenderer{
   }
   if(l.vignette){ctx.save();const r=Math.max(w,h),g=ctx.createRadialGradient(x+w*.5,y+h*.45,0,x+w*.5,y+h*.45,r*.72);g.addColorStop(0,'rgba(8,10,28,0)');g.addColorStop(1,`rgba(8,10,28,${n*.5})`);ctx.fillStyle=g;ctx.fillRect(x,y,w,h);ctx.restore()}
  }
- draw(ctx,{x=0,y=0,zoom=1,width,height,grid=false,collision=false,selected=null,actor=null,time=0,markers=false,monsterMarkers=markers,selectedMonsterSpawn=null,interactionMarkers=false,objectState=null,drawActor=null}={}){
+ draw(ctx,{x=0,y=0,zoom=1,width,height,grid=false,collision=false,selected=null,actor=null,time=0,markers=false,monsterMarkers=markers,selectedMonsterSpawn=null,interactionMarkers=false,objectState=null,drawActor=null,entities=[]}={}){
   const p=this.project,cs=p.cell,overview=cs*zoom<18,visible=b=>b.x1>=x&&b.y1>=y&&b.x0<=x+width/zoom&&b.y0<=y+height/zoom;ctx.save();ctx.scale(zoom,zoom);ctx.translate(-x,-y);ctx.fillStyle='#0d1520';ctx.fillRect(x,y,width/zoom,height/zoom);
   if(overview)ctx.drawImage(this.overview(),0,0,p.cols*cs,p.rows*cs);
   else for(let gy=Math.max(0,Math.floor(y/cs));gy<Math.min(p.rows,Math.ceil((y+height/zoom)/cs));gy++)for(let gx=Math.max(0,Math.floor(x/cs));gx<Math.min(p.cols,Math.ceil((x+width/zoom)/cs));gx++){const type=p.terrain[gy*p.cols+gx];ctx.drawImage(this.tile(type,gx,gy),gx*cs,gy*cs,cs+.2,cs+.2);if(type==='water'){ctx.strokeStyle='#d5f5ff33';ctx.lineWidth=1/zoom;ctx.beginPath();ctx.moveTo(gx*cs+8,gy*cs+cs*.5+Math.sin(time*2+gx)*3);ctx.lineTo(gx*cs+cs-8,gy*cs+cs*.5+Math.sin(time*2+gx+1)*3);ctx.stroke()}}
@@ -292,8 +341,8 @@ export class MapRenderer{
   const objects=orderedObjects(p,this.images).filter(o=>!objectState?.(o.id)?.hidden);this.drawGroundShadows(ctx,objects,visible);
   const draw=o=>{if(!visible(objectBounds(p,o)))return;const s=p.assets[o.asset],img=this.images.get(o.asset),v=objectState?.(o.id);ctx.save();ctx.translate(o.x+(v?.shakeX||0),o.y);ctx.rotate(o.rotation+(v?.shakeAngle||0));ctx.scale(o.scale*(o.flip?-1:1),o.scale);if(img){if(objectOccludesActor(p,o,actor,imageGeometry(img)))ctx.globalAlpha*=.5;ctx.drawImage(img,-s.ax*s.w,-s.ay*s.h,s.w,s.h)}ctx.restore()};
   for(const o of objects.filter(o=>o.layer==='ground'))draw(o);
-  const sorted=objects.filter(o=>o.layer==='sorted');let done=false;const drawHero=()=>{if(drawActor)drawActor(ctx,actor);else{ctx.save();ctx.translate(actor.x,actor.y);ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(0,0,14,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#d3ed92';ctx.beginPath();ctx.arc(0,-17,12,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#2c4936';ctx.lineWidth=2;ctx.stroke();ctx.restore()}};
-  for(const o of sorted){if(actor&&!done&&actor.y<objectGroundPoint(p,o,imageGeometry(this.images.get(o.asset))).y){drawHero();done=true}draw(o)}if(actor&&!done)drawHero();for(const o of objects.filter(o=>o.layer==='front'))draw(o);
+  const sorted=objects.filter(o=>o.layer==='sorted');const drawHero=()=>{if(drawActor)drawActor(ctx,actor);else{ctx.save();ctx.translate(actor.x,actor.y);ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(0,0,14,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#d3ed92';ctx.beginPath();ctx.arc(0,-17,12,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#2c4936';ctx.lineWidth=2;ctx.stroke();ctx.restore()}};
+  const depth=[...sorted.map(o=>({y:objectGroundPoint(p,o,imageGeometry(this.images.get(o.asset))).y,draw:()=>draw(o)})),...entities.map(e=>({y:e.y,draw:()=>e.draw(ctx)}))];if(actor)depth.push({y:actor.y,draw:drawHero});depth.sort((a,b)=>a.y-b.y);for(const e of depth)e.draw();for(const o of objects.filter(o=>o.layer==='front'))draw(o);
   this.atmosphere(ctx,{x,y,zoom,width,height,actor});
   // Editor overlays deliberately follow lighting, so night mode cannot hide
   // collision paint, selection handles or spawn/warp markers.

@@ -5,7 +5,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright'),root=fileURLToPath(new URL('../',import.meta.url)),base=process.argv[2],b=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--no-sandbox']});
 const errors=[],click=(p,id)=>p.locator(id).evaluate(el=>el.click()),value=(p,id,v)=>p.locator(id).evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}))},v),stored=p=>p.evaluate(()=>JSON.parse(localStorage.getItem('nightcamp.cutout.v1'))),wait=()=>new Promise(r=>setTimeout(r,180));
-const download=async(p,id)=>{const[d]=await Promise.all([p.waitForEvent('download'),click(p,id)]);return JSON.parse(await fs.readFile(await d.path(),'utf8'))};
+const download=async(p,id)=>{try{const[d]=await Promise.all([p.waitForEvent('download'),click(p,id)]);return JSON.parse(await fs.readFile(await d.path(),'utf8'))}catch(e){throw Error(e.message+' · Studio: '+await p.locator('#status').textContent())}};
 try{
  const c=await b.newContext({viewport:{width:393,height:852},deviceScaleFactor:2});c.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
  await c.route('**/game-20261025-1758/assets/**',async r=>{const u=new URL(r.request().url());if(!['localhost','127.0.0.1'].includes(u.hostname))return r.continue();const dir=path.join(root,'dist-full/game-20261025-1758'),file=path.resolve(dir,u.pathname.split('/game-20261025-1758/')[1]||'');if(!file.startsWith(dir+path.sep))return r.abort();try{await fs.access(file);return r.fulfill({path:file})}catch{return r.continue()}});
@@ -26,7 +26,7 @@ try{
  await p.locator('#accessoryPackFile').setInputFiles({name:'pack.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(single))});await wait();assert.equal((await stored(p)).attachments.length,2);assert.equal((await stored(p)).attachments.find(a=>a.accessoryId==='hat_paladin').mountProfiles.length,2);
  // Exercise actual iframe protocol and attachment apply, not a fabricated wing.
  await click(p,'#wingStudioButton');await p.waitForFunction(()=>document.querySelector('#wingStudioDialog iframe')?.contentDocument?.getElementById('status')?.textContent.includes('Dựng rig →'),{},{timeout:60000});
- const frame=p.frames().find(f=>f.url().includes('mode=wings'));assert.ok(frame);await value(frame,'#pet','falcon_wings');await wait();
+ const frame=p.frames().find(f=>f.url().includes('mode=wings'));assert.ok(frame);await value(frame,'#pet','falcon_wings');await frame.waitForFunction(()=>document.getElementById('pet').value==='falcon_wings'&&document.getElementById('status').textContent.includes('Đã mở')&&document.querySelector('main').getAttribute('aria-busy')==='false',{},{timeout:60000});
  const applyId=await frame.locator('button').evaluateAll(ns=>ns.find(n=>n.textContent.includes('Gắn vào nhân vật'))?.id);assert.ok(applyId);await click(frame,'#'+applyId);
  await p.waitForFunction(()=>JSON.parse(localStorage.getItem('nightcamp.cutout.v1')).attachments.some(a=>a.wingRig));await wait();
  await frame.evaluate(()=>parent.postMessage({type:'nightcamp.wing.close'},location.origin));await wait();

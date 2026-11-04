@@ -45,7 +45,7 @@ export function resolveAccessory(item,character){
  validateProfile(fit);for(const k of FIT_FIELDS)delete a[k];Object.assign(a,structuredClone(fit.transform));return a;
 }
 export function equipAccessory(inventory,item,character){
- const a=resolveAccessory(item,character);a.id=a.id||a.accessoryId;a.visible=true;
+ const a=resolveAccessory(item,character);a.id=a.accessoryId||a.id;a.visible=true;
  const type=v=>v.wingRig?'wings':v.category||({head:'hat',face:'glasses',handF:'weapon',handB:'weapon',back:'wings'})[v.socket];
  const next=inventory.filter(v=>(v.accessoryId||v.id)!==(a.accessoryId||a.id)).map(v=>({...structuredClone(v),visible:type(v)===type(a)?false:v.visible}));next.push(a);return next;
 }

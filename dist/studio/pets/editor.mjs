@@ -38,7 +38,7 @@ function checkpoint(){state.undo.push(JSON.stringify(state.project));if(state.un
 function stash(){state.project.clips||={};state.project.clips[state.project.activeClipId||'custom']=clone(state.project.clip)}
 function persist(){stash();try{localStorage.setItem(draftKey,JSON.stringify(state.project))}catch{message('Bộ nhớ nháp pet đầy. Bấm Lưu project để tải bản sao.')}}
 async function image(src){const url=source.assetURL(src);if(!cache.has(url))cache.set(url,new Promise((ok,no)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>ok(img);img.onerror=()=>{cache.delete(url);no(Error('Không tải được ảnh '+src.slice(0,100)))};img.src=url}));return cache.get(url)}
-function busy(value){state.loading=value;document.querySelector('main').setAttribute('aria-busy',String(value));for(const n of document.querySelectorAll('main button,main input,main select,#desktopSave'))n.disabled=value;if(!value)updateModeControls()}
+function busy(value){state.loading=value;document.querySelector('main').setAttribute('aria-busy',String(value));for(const n of document.querySelectorAll('main button,main input,main select,#desktopSave,#applyWings'))n.disabled=value;if(!value)updateModeControls()}
 async function adopt(p){
  if(wingMode)p=prepareWingProject(p);
  validatePet(p);const version=++adoption,next=clone(p),images=new Map();
@@ -237,7 +237,7 @@ if(wingMode){
  document.querySelector('[data-panel=pets]>.hint').textContent='Cánh gắn sau lưng · rig độc lập · chưa có mesh / trọng số.';
  $('newName').value='my_wing_animation';$('dragMode').setAttribute('aria-label','Chế độ kéo cánh');$('stage').setAttribute('aria-label','Xem và kéo khớp cánh');
  const apply=document.createElement('button');apply.id='applyWings';apply.className='primary';apply.textContent='Gắn vào nhân vật';document.querySelector('header nav').prepend(apply);
- apply.onclick=safe(async()=>{pause();if(parent===window)throw Error('Mở Cánh & rig từ Studio nhân vật để gắn vào lưng');apply.disabled=true;try{const p=await portable();parent.postMessage({type:'nightcamp.wing.apply',project:p},location.origin);message('Đang gắn rig cánh…')}catch(error){apply.disabled=false;throw error}});
+ apply.onclick=safe(async()=>{pause();if(state.loading)throw Error('Chờ tải xong ảnh cánh trước khi gắn');if(parent===window)throw Error('Mở Cánh & rig từ Studio nhân vật để gắn vào lưng');apply.disabled=true;try{const p=await portable();parent.postMessage({type:'nightcamp.wing.apply',project:p},location.origin);message('Đang gắn rig cánh…')}catch(error){apply.disabled=false;throw error}});
  window.addEventListener('message',safe(async e=>{
   if(e.origin!==location.origin||e.source!==parent)return;
   if(e.data?.type==='nightcamp.wing.init'){

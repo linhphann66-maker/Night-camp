@@ -1,0 +1,46 @@
+import {validateMap,monsterSpawnPosition} from './runtime.mjs';
+export function mountMonsterSpawnEditor(h){
+ const $=id=>document.getElementById(id),cv=$('stage'),panel=document.createElement('section');panel.dataset.panel='monsters';panel.id='monsterSpawnPanel';
+ panel.innerHTML=`<h2>Điểm sinh quái</h2><p class="hint">ID điểm phân biệt từng bãi. Mã quái (monsterId) phải trùng registry của game mới; không phải tên file ảnh. Nhiều điểm có thể dùng cùng mã quái.</p>
+<button id="newMonsterSpawn" class="primary">＋ Chạm map để đặt điểm mới</button><label>Điểm đang chọn<select id="monsterSpawnList"></select></label><p id="monsterSpawnSummary" class="hint"></p>
+<label>ID điểm sinh<input id="monsterSpawnId" maxlength="100" spellcheck="false"></label><label>Tên ghi chú<input id="monsterSpawnName" maxlength="100" placeholder="Bãi slime phía đông"></label><label>Mã quái (monsterId)<input id="monsterTypeId" maxlength="100" spellcheck="false" placeholder="slime_green"></label>
+<div class="pair"><label>X (tọa độ thế giới)<input id="monsterSpawnX" type="number" step="1"></label><label>Y (tọa độ thế giới)<input id="monsterSpawnY" type="number" step="1"></label></div>
+<div class="pair"><label>Bán kính sinh<input id="monsterSpawnRadius" type="number" min="0" max="1024" step="1"></label><label>Số quái tối đa<input id="monsterSpawnCount" type="number" min="1" max="50" step="1"></label></div>
+<label>Hồi sinh sau khi chết (giây)<input id="monsterRespawnSeconds" type="number" min="0" max="86400" step="1"></label><p class="hint">Bán kính 0 = đúng vị trí. Hồi sinh 0 = chỉ sinh đợt đầu, không hồi sinh. Số lượng là giới hạn quái sống + đang tạo, không tạo thêm mỗi frame.</p>
+<label><input id="monsterSpawnEnabled" type="checkbox" checked> Bật điểm sinh trong game</label><button id="saveMonsterSpawn">Lưu / thêm theo tọa độ</button><div class="row"><button id="editMonsterSpawn">◇ Chọn / kéo điểm</button><button id="focusMonsterSpawn">◎ Về điểm</button></div><div class="row"><button id="duplicateMonsterSpawn">Nhân bản điểm</button><button id="deleteMonsterSpawn">Xóa điểm</button></div><label><input id="showMonsterSpawns" type="checkbox" checked> Hiện điểm & phạm vi sinh quái</label><button id="checkMonsterSpawns">Kiểm tra vị trí sinh</button><p id="monsterSpawnCheck" class="hint" role="status"></p><p class="hint">Các vòng và nhãn chỉ là dấu thiết kế, không phải quái thật. Chạy thử không tự thêm AI/chiến đấu. Khi xuất map, điểm sinh đi cùng dữ liệu kể cả khi tắt dấu. Không liên quan spawn người chơi.</p><a href="MONSTER-SPAWNS.md" target="_blank" rel="noopener">Hướng dẫn / prompt tích hợp vào game ↗</a>`;
+ document.querySelector('aside.right').append(panel);const menu=document.createElement('button');menu.dataset.tab='monsters';menu.textContent='⚑ Điểm sinh quái';$('mapMenu').querySelector('nav').append(menu);
+ for(const [id,label]of [['monsterPlace','＋ Đặt điểm sinh quái'],['monsterSelect','◇ Chọn / kéo điểm quái'],['monsterErase','⌫ Xóa điểm sinh quái']])$('tool').add(new Option(label,id));
+ let chosen=null,drag=null,draft={id:'',name:'',monsterId:'slime_green',x:160,y:160,radius:80,count:1,respawnSeconds:30,enabled:true};
+ const rows=()=>h.state.project?.monsterSpawns||[],current=()=>rows().find(s=>s.id===chosen),nextId=()=>{let n=1;while(rows().some(s=>s.id==='mob_spawn_'+String(n).padStart(2,'0')))n++;return 'mob_spawn_'+String(n).padStart(2,'0')};
+ const fields={monsterSpawnId:'id',monsterSpawnName:'name',monsterTypeId:'monsterId',monsterSpawnX:'x',monsterSpawnY:'y',monsterSpawnRadius:'radius',monsterSpawnCount:'count',monsterRespawnSeconds:'respawnSeconds',monsterSpawnEnabled:'enabled'};
+ const on=(id,event,fn)=>$(id).addEventListener(event,h.safe(fn)),bound=(v,max)=>Math.round(Math.max(0,Math.min(max-1,v)));
+ function read(){return Object.fromEntries(Object.entries(fields).map(([id,key])=>[key,key==='enabled'?$(id).checked:['id','name','monsterId'].includes(key)?$(id).value.trim():$(id).valueAsNumber]))}
+ function assertIdle(){if(drag)throw Error('Thả điểm sinh quái đang kéo trước khi sửa/lưu map')}
+ function commit(s){const old=chosen;chosen=s.id;try{h.update(p=>{const i=p.monsterSpawns?.findIndex(v=>v.id===old)??-1;if(i>=0)p.monsterSpawns[i]=s;else(p.monsterSpawns||=[]).push(s)})}catch(e){chosen=old;throw e}refresh()}
+ function refresh(){if(!h.state.project)return;if(chosen&&!current())chosen=null;if(!draft.id)draft.id=nextId();
+  $('monsterSpawnList').replaceChildren(new Option('— Chọn điểm / tạo điểm mới —',''),...rows().map(s=>new Option((s.enabled?'● ':'○ ')+s.id+' → '+s.monsterId+' ×'+s.count,s.id)));$('monsterSpawnList').value=chosen||'';
+  const s=current()||draft;for(const [id,key]of Object.entries(fields)){if(key==='enabled')$(id).checked=s[key];else $(id).value=s[key]}
+  $('monsterSpawnSummary').textContent=rows().length+'/256 điểm · '+rows().filter(s=>s.enabled).reduce((n,s)=>n+s.count,0)+' quái tối đa đang bật. ID điểm chỉ duy nhất trong map; game dùng mapId + ID điểm.';
+  for(const id of ['editMonsterSpawn','focusMonsterSpawn','duplicateMonsterSpawn','deleteMonsterSpawn'])$(id).disabled=!current()||h.state.busy;
+ }
+ function begin(){h.assertIdle();h.stop();chosen=null;draft={...read(),id:nextId()};$('tool').value='monsterPlace';refresh();h.selectTab('preview');h.message('Chạm trên map để đặt điểm sinh quái. Sau đó mở Điểm sinh quái để chỉnh mã quái / hồi sinh.')}
+ on('newMonsterSpawn','click',begin);on('monsterSpawnList','change',()=>{h.assertIdle();chosen=$('monsterSpawnList').value||null;$('tool').value='monsterSelect';refresh()});
+ on('saveMonsterSpawn','click',()=>{h.assertIdle();commit(read());h.message('Đã lưu điểm sinh quái '+chosen)});
+ for(const id of Object.keys(fields))on(id,'change',()=>{if(current())commit(read());else{const next=read();validateMap({...h.state.project,monsterSpawns:[next]});draft=next}});
+ on('editMonsterSpawn','click',()=>{h.assertIdle();h.stop();$('tool').value='monsterSelect';h.selectTab('preview');h.message('Chạm / kéo dấu tâm điểm quái để di chuyển. Chọn điểm trong danh sách nếu các dấu chồng nhau.')});
+ function focus(s){if(!s)return;const r=cv.getBoundingClientRect();h.camera.x=s.x-r.width/h.camera.zoom/2;h.camera.y=s.y-r.height/h.camera.zoom/2}
+ on('focusMonsterSpawn','click',()=>{const s=current();if(!s)return;h.selectTab('preview');focus(s)});
+ on('duplicateMonsterSpawn','click',()=>{const s=current();if(!s)return;const p=h.state.project,next={...structuredClone(s),id:nextId(),x:bound(s.x+24,p.cols*p.cell),y:bound(s.y+24,p.rows*p.cell)},old=chosen;chosen=next.id;try{h.update(p=>(p.monsterSpawns||=[]).push(next))}catch(e){chosen=old;throw e}refresh()});
+ on('deleteMonsterSpawn','click',()=>{const id=chosen;h.update(p=>p.monsterSpawns=(p.monsterSpawns||[]).filter(s=>s.id!==id));chosen=null;refresh();h.message('Đã xóa điểm sinh quái; có thể Hoàn tác.')});
+ on('checkMonsterSpawns','click',()=>{const bad=rows().filter(s=>s.enabled&&!monsterSpawnPosition(h.state.project,s));$('monsterSpawnCheck').textContent=bad.length?'Chưa tìm được chỗ trống cho: '+bad.map(s=>s.id).join(', ')+'. Dời điểm / tăng bán kính hoặc sửa vùng cản.':'Đã tìm được vị trí đi được cho mọi điểm đang bật. Game vẫn cần đăng ký đúng monsterId.';h.message($('monsterSpawnCheck').textContent)});
+ cv.addEventListener('pointerdown',h.safe(e=>{const tool=$('tool').value;if(h.state.busy||h.state.playing||!['monsterPlace','monsterSelect','monsterErase'].includes(tool)||e.button===1)return;e.preventDefault();e.stopImmediatePropagation();h.assertIdle();const p=h.state.project,[x,y]=h.world(e);
+  if(tool==='monsterPlace'){if(x<0||y<0||x>=p.cols*p.cell||y>=p.rows*p.cell)return;const s={...read(),x:bound(x,p.cols*p.cell),y:bound(y,p.rows*p.cell)};chosen=null;commit(s);$('tool').value='monsterSelect';h.message('Đã đặt '+s.id+' → '+s.monsterId+'. Mở Điểm sinh quái để chỉnh.');return}
+  let best=null,dist=22/h.camera.zoom;for(const s of [...rows()].reverse()){const d=Math.hypot(s.x-x,s.y-y);if(d<dist){best=s;dist=d}}chosen=best?.id||null;refresh();if(!best)return;
+  if(tool==='monsterErase'){const id=best.id;h.update(p=>p.monsterSpawns=p.monsterSpawns.filter(s=>s.id!==id));chosen=null;refresh();return}
+  cv.setPointerCapture(e.pointerId);drag={pointer:e.pointerId,id:best.id,before:h.snapshot(),dx:best.x-x,dy:best.y-y};
+ }),true);
+ cv.addEventListener('pointermove',h.safe(e=>{if(!drag||drag.pointer!==e.pointerId)return;e.preventDefault();e.stopImmediatePropagation();const p=h.state.project,[x,y]=h.world(e),s=p.monsterSpawns.find(s=>s.id===drag.id);s.x=bound(x+drag.dx,p.cols*p.cell);s.y=bound(y+drag.dy,p.rows*p.cell);refresh()}),true);
+ for(const event of ['pointerup','pointercancel','lostpointercapture'])cv.addEventListener(event,h.safe(e=>{if(!drag||drag.pointer!==e.pointerId)return;e.stopImmediatePropagation();const before=drag.before;drag=null;if(event==='pointercancel'){h.state.project=h.restoreSnapshot(before);h.state.renderer.project=h.state.project}else{validateMap(h.state.project);h.remember(before);h.persist()}refresh()}),true);
+ $('tool').addEventListener('change',h.safe(()=>{if($('tool').value==='monsterPlace')begin()}));
+ return {refresh,assertIdle,onTab:id=>{if(id==='monsters')focus(current()||rows()[0])},selected:()=>chosen,visible:()=>$('showMonsterSpawns').checked};
+}

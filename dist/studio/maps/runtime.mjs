@@ -3,7 +3,8 @@
 import {NATIVE_GROUNDS,NATIVE_MAPS,NATIVE_GROUND_BUILD} from './native-ground.mjs';
 export {NATIVE_GROUNDS,NATIVE_MAPS,NATIVE_GROUND_BUILD};
 export const TERRAINS={grass:{name:'Cỏ',color:'#76aa5e'},dirt:{name:'Đất / đường',color:'#cdaa76'},stone:{name:'Đá lát',color:'#92929a'},sand:{name:'Cát',color:'#dcc08c'},water:{name:'Nước',color:'#5caccf'},moss:{name:'Rêu / cỏ tối',color:'#567e64'}};
-export const MAP_RUNTIME_VERSION=2;
+export const MAP_RUNTIME_VERSION=3;
+export const MONSTER_SPAWN_SCHEMA=Object.freeze({version:1,collection:'project.monsterSpawns',pointId:'id',monsterTypeId:'monsterId',identity:'mapId + spawnId',coordinates:'World XY at monster feet, same units/origin as project.spawn; not cells or screen pixels',count:'Maximum alive + pending per point',respawnSeconds:'Seconds after death; 0 means no respawn',registry:'Game must map monsterId to its own template/assets/AI. Never infer type from spawn point ID or image filename.',runtime:'MonsterSpawnController: poll(dt) -> requests; confirm(instanceId) on creation, reject on failure, markDead on death. Use one authoritative controller per map instance on server; offline can run locally.'});
 const safeId=id=>typeof id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(id)&&!['__proto__','constructor','prototype'].includes(id);
 const finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
 export const DEFAULT_LIGHTING=Object.freeze({mode:'day',hour:22,ambient:1,vignette:true,playerLight:true,blend:true,details:true});
@@ -28,9 +29,10 @@ export function validateMap(p){
  if(!p.spawn||!finite(p.spawn.x,0,p.cols*p.cell)||!finite(p.spawn.y,0,p.rows*p.cell))fail('Điểm xuất hiện nằm ngoài map');
  if(!Array.isArray(p.warps)||p.warps.length>200)fail('Danh sách cửa map không hợp lệ');
  const warps=new Set();for(const w of p.warps){if(!safeId(w.id)||warps.has(w.id)||!safeId(w.to)||!safeId(w.at)||!finite(w.x,0,p.cols*p.cell)||!finite(w.y,0,p.rows*p.cell)||!finite(w.radius,8,500))fail('Cửa chuyển map không hợp lệ');warps.add(w.id)}
+ validateMonsterSpawns(p);
  return p;
 }
-export function createMap({id='custom_map',name='Map mới',cols=32,rows=24,cell=64,seed=7,terrain='grass'}={}){return validateMap({format:'darkin-map-v1',id,name,cols,rows,cell,seed,assets:{},terrain:Array(cols*rows).fill(terrain),blocked:Array(cols*rows).fill(0),walkable:Array(cols*rows).fill(0),objects:[],roads:[],spawn:{x:cell*2.5,y:cell*2.5},warps:[]})}
+export function createMap({id='custom_map',name='Map mới',cols=32,rows=24,cell=64,seed=7,terrain='grass'}={}){return validateMap({format:'darkin-map-v1',id,name,cols,rows,cell,seed,assets:{},terrain:Array(cols*rows).fill(terrain),blocked:Array(cols*rows).fill(0),walkable:Array(cols*rows).fill(0),objects:[],roads:[],monsterSpawns:[],spawn:{x:cell*2.5,y:cell*2.5},warps:[]})}
 export function resizedMap(project,cols,rows,cell=project.cell){
  const p=structuredClone(project);p.cols=cols;p.rows=rows;p.cell=cell;
  if(!Number.isInteger(cols)||!Number.isInteger(rows)||!finite(cols,4,128)||!finite(rows,4,128))fail('Map từ 4 đến 128 ô mỗi chiều');
@@ -83,6 +85,61 @@ export function pointWalkable(p,x,y){
 export function canWalk(p,x,y,r=12){if(!pointWalkable(p,x,y))return false;for(let i=0;i<8;i++)if(!pointWalkable(p,x+Math.cos(i*Math.PI/4)*r,y+Math.sin(i*Math.PI/4)*r*.6))return false;return true}
 export function moveActor(p,actor,dx,dy,dt,speed=180){const len=Math.max(1,Math.hypot(dx,dy)),x=dx/len*speed*Math.max(0,Math.min(.1,dt)),y=dy/len*speed*Math.max(0,Math.min(.1,dt)),n=Math.max(1,Math.ceil(Math.hypot(x,y)/5));for(let i=0;i<n;i++){if(canWalk(p,actor.x+x/n,actor.y,actor.radius??12))actor.x+=x/n;if(canWalk(p,actor.x,actor.y+y/n,actor.radius??12))actor.y+=y/n}return actor}
 export function warpAt(p,x,y){return p.warps.find(w=>Math.hypot(w.x-x,w.y-y)<=w.radius)||null}
+export function validateMonsterSpawns(p){
+ if(p.monsterSpawns===undefined)return;
+ if(!Array.isArray(p.monsterSpawns)||p.monsterSpawns.length>256)fail('Tối đa 256 điểm sinh quái');
+ const ids=new Set();let total=0;
+ for(const s of p.monsterSpawns){
+  if(!s||!safeId(s.id)||ids.has(s.id)||!safeId(s.monsterId)||typeof s.name!=='string'||s.name.length>100||typeof s.enabled!=='boolean'||!finite(s.x,0,p.cols*p.cell)||!finite(s.y,0,p.rows*p.cell)||s.x>=p.cols*p.cell||s.y>=p.rows*p.cell||!finite(s.radius,0,1024)||!Number.isInteger(s.count)||!finite(s.count,1,50)||!finite(s.respawnSeconds,0,86400))fail('Điểm sinh quái không hợp lệ: ID phải riêng, tọa độ trong map, 1–50 quái, bán kính 0–1024, hồi sinh 0–86400 giây');
+  ids.add(s.id);total+=s.count;
+ }
+ if(total>1024)fail('Tổng giới hạn số quái tại các điểm không quá 1024 mỗi map');
+}
+export function monsterSpawnDefinitions(data,{enabledOnly=true}={}){
+ const p=validateMap(data?.format==='darkin-map-bundle-v1'?data.project:data);
+ return (p.monsterSpawns||[]).filter(s=>!enabledOnly||s.enabled).map(s=>({...structuredClone(s),mapId:p.id}));
+}
+// World coordinates, not tiles or camera pixels. Fail closed on water/walls.
+export function monsterSpawnPosition(p,s,{random=Math.random,actorRadius=12,canSpawn=()=>true}={}){
+ if(!finite(actorRadius,0,256))fail('Bán kính chân quái không hợp lệ');
+ const rand=()=>{const v=random();if(!finite(v,0,1)||v===1)fail('Nguồn random phải trả số trong [0,1)');return v};
+ for(let i=0;i<(s.radius?33:1);i++){
+  const angle=s.radius&&i<32?rand()*Math.PI*2:0,r=s.radius&&i<32?Math.sqrt(rand())*s.radius:0,x=s.x+Math.cos(angle)*r,y=s.y+Math.sin(angle)*r;
+  if(canWalk(p,x,y,actorRadius)&&canSpawn(x,y,s))return {x,y};
+ }
+ return null;
+}
+// Pure scheduling: game/server owns entities, combat, AI and death events.
+// Pending requests reserve capacity until confirm/reject, avoiding async dupes.
+export class MonsterSpawnController{
+ constructor(data,{monsterIds,random=Math.random,actorRadius=12,canSpawn=()=>true}={}){
+  this.project=validateMap(data?.format==='darkin-map-bundle-v1'?data.project:data);this.definitions=monsterSpawnDefinitions(this.project);this.time=0;this.instances=new Map();this.options={random,actorRadius,canSpawn};
+  if(!Array.isArray(monsterIds)&&!(monsterIds instanceof Set))fail('Truyền monsterIds từ registry quái của game');
+  const known=new Set(monsterIds);for(const s of this.definitions)if(!known.has(s.monsterId))fail('Game chưa đăng ký monsterId='+s.monsterId+' (điểm '+s.id+')');
+  this.slots=this.definitions.flatMap(s=>Array.from({length:s.count},(_,slot)=>({definition:s,slot,state:'ready',readyAt:0,sequence:0,instanceId:null})));
+ }
+ poll(dt=0){
+  if(!finite(dt,0,86400))fail('Bước thời gian sinh quái phải từ 0 đến 86400 giây');this.time+=dt;const requests=[];
+  try{for(const slot of this.slots){if(!['ready','waiting'].includes(slot.state)||slot.readyAt>this.time)continue;
+   const s=slot.definition,pos=monsterSpawnPosition(this.project,s,this.options);if(!pos){slot.readyAt=this.time+1;continue}
+   const instanceId=this.project.id+':'+s.id+':'+slot.slot+':'+(++slot.sequence);slot.state='pending';slot.instanceId=instanceId;this.instances.set(instanceId,slot);
+   requests.push({instanceId,mapId:this.project.id,spawnId:s.id,monsterId:s.monsterId,slot:slot.slot,...pos});
+  }}catch(error){for(const r of requests)this.reject(r.instanceId);throw error}
+  return requests;
+ }
+ confirm(instanceId){const s=this.instances.get(instanceId);if(!s||s.state!=='pending')return false;s.state='alive';return true}
+ reject(instanceId){const s=this.instances.get(instanceId);if(!s||s.state!=='pending')return false;this.instances.delete(instanceId);s.instanceId=null;s.state='ready';s.readyAt=this.time+1;return true}
+ markDead(instanceId){const s=this.instances.get(instanceId);if(!s||s.state!=='alive')return false;this.instances.delete(instanceId);s.instanceId=null;s.state=s.definition.respawnSeconds>0?'waiting':'retired';s.readyAt=this.time+s.definition.respawnSeconds;return true}
+ stats(){return this.slots.reduce((v,s)=>(v[s.state]=(v[s.state]||0)+1,v),{ready:0,pending:0,alive:0,waiting:0,retired:0})}
+}
+export function drawMonsterSpawnMarkers(ctx,p,{zoom=1,selected=null}={}){
+ ctx.save();ctx.font=`${12/zoom}px system-ui`;ctx.lineWidth=1.5/zoom;
+ for(const s of p.monsterSpawns||[]){ctx.strokeStyle=s.id===selected?'#fff4b0':s.enabled?'#ffad87':'#9aabb8';ctx.fillStyle=ctx.strokeStyle;ctx.setLineDash(s.enabled?[]:[4/zoom,4/zoom]);
+  if(s.radius){ctx.beginPath();ctx.arc(s.x,s.y,s.radius,0,Math.PI*2);ctx.stroke()}
+  ctx.setLineDash([]);ctx.beginPath();ctx.arc(s.x,s.y,(s.id===selected?10:7)/zoom,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(s.x-4/zoom,s.y);ctx.lineTo(s.x+4/zoom,s.y);ctx.moveTo(s.x,s.y-4/zoom);ctx.lineTo(s.x,s.y+4/zoom);ctx.stroke();
+  ctx.fillText(s.id+' → '+s.monsterId+' ×'+s.count+(s.enabled?'':' · tắt'),s.x+14/zoom,s.y-10/zoom);
+ }ctx.restore();
+}
 // Interpolating cardinal spline: the editable points lie ON the road. Repeated
 // points and a zero-length segment are valid and never divide by zero.
 const roadGeometryCache=new WeakMap();
@@ -185,7 +242,7 @@ export class MapRenderer{
   }
   if(l.vignette){ctx.save();const r=Math.max(w,h),g=ctx.createRadialGradient(x+w*.5,y+h*.45,0,x+w*.5,y+h*.45,r*.72);g.addColorStop(0,'rgba(8,10,28,0)');g.addColorStop(1,`rgba(8,10,28,${n*.5})`);ctx.fillStyle=g;ctx.fillRect(x,y,w,h);ctx.restore()}
  }
- draw(ctx,{x=0,y=0,zoom=1,width,height,grid=false,collision=false,selected=null,actor=null,time=0,markers=false,drawActor=null}={}){
+ draw(ctx,{x=0,y=0,zoom=1,width,height,grid=false,collision=false,selected=null,actor=null,time=0,markers=false,monsterMarkers=markers,selectedMonsterSpawn=null,drawActor=null}={}){
   const p=this.project,cs=p.cell,overview=cs*zoom<18,visible=b=>b.x1>=x&&b.y1>=y&&b.x0<=x+width/zoom&&b.y0<=y+height/zoom;ctx.save();ctx.scale(zoom,zoom);ctx.translate(-x,-y);ctx.fillStyle='#0d1520';ctx.fillRect(x,y,width/zoom,height/zoom);
   if(overview)ctx.drawImage(this.overview(),0,0,p.cols*cs,p.rows*cs);
   else for(let gy=Math.max(0,Math.floor(y/cs));gy<Math.min(p.rows,Math.ceil((y+height/zoom)/cs));gy++)for(let gx=Math.max(0,Math.floor(x/cs));gx<Math.min(p.cols,Math.ceil((x+width/zoom)/cs));gx++){const type=p.terrain[gy*p.cols+gx];ctx.drawImage(this.tile(type,gx,gy),gx*cs,gy*cs,cs+.2,cs+.2);if(type==='water'){ctx.strokeStyle='#d5f5ff33';ctx.lineWidth=1/zoom;ctx.beginPath();ctx.moveTo(gx*cs+8,gy*cs+cs*.5+Math.sin(time*2+gx)*3);ctx.lineTo(gx*cs+cs-8,gy*cs+cs*.5+Math.sin(time*2+gx+1)*3);ctx.stroke()}}
@@ -201,12 +258,14 @@ export class MapRenderer{
   for(let gy=Math.max(0,Math.floor(y/cs));gy<Math.min(p.rows,Math.ceil((y+height/zoom)/cs));gy++)for(let gx=Math.max(0,Math.floor(x/cs));gx<Math.min(p.cols,Math.ceil((x+width/zoom)/cs));gx++){if(grid&&cs*zoom>=10){ctx.strokeStyle='#101a2c36';ctx.lineWidth=1/zoom;ctx.strokeRect(gx*cs,gy*cs,cs,cs)}if(collision&&(p.blocked[gy*p.cols+gx]||p.walkable[gy*p.cols+gx])){ctx.fillStyle=p.blocked[gy*p.cols+gx]?'#ff675577':'#62d6cd66';ctx.fillRect(gx*cs,gy*cs,cs,cs)}}
   if(collision||selected)for(const o of p.objects){if(!visible(objectBounds(p,o)))continue;const s=p.assets[o.asset];ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.rotation);ctx.scale(o.scale*(o.flip?-1:1),o.scale);if(collision)for(const [shape,color]of [[o.collider,'#ff8c77'],[o.walk,'#74f0d2']])if(shape){ctx.strokeStyle=color;ctx.lineWidth=2/(zoom*o.scale);ctx.beginPath();if(shape.type==='ellipse')ctx.ellipse(shape.x,shape.y,shape.w/2,shape.h/2,0,0,Math.PI*2);else ctx.rect(shape.x-shape.w/2,shape.y-shape.h/2,shape.w,shape.h);ctx.stroke()}if(selected===o.id){ctx.strokeStyle='#e1f7a8';ctx.lineWidth=2/(zoom*o.scale);ctx.strokeRect(-s.ax*s.w,-s.ay*s.h,s.w,s.h);ctx.fillStyle='#ffbd80';ctx.beginPath();ctx.arc(0,0,5/o.scale,0,Math.PI*2);ctx.fill()}ctx.restore()}
   this.overlay?.(ctx,{x,y,zoom,width,height});
+  if(monsterMarkers)drawMonsterSpawnMarkers(ctx,p,{zoom,selected:selectedMonsterSpawn});
   if(markers){ctx.save();ctx.lineWidth=2/zoom;ctx.strokeStyle='#c7ef89';ctx.beginPath();ctx.arc(p.spawn.x,p.spawn.y,18,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#e5ffbe';ctx.font=`${12/zoom}px system-ui`;ctx.fillText('Spawn',p.spawn.x+22,p.spawn.y);for(const w of p.warps){ctx.strokeStyle='#b99cff';ctx.beginPath();ctx.arc(w.x,w.y,w.radius,0,Math.PI*2);ctx.stroke();ctx.fillText(w.id+' → '+w.to,w.x+w.radius,w.y)}ctx.restore()}ctx.restore();
  }
 }
 export class DarkinMapPlayer{
  static async load(data,resolve=src=>src){const p=structuredClone(validateMap(data.format==='darkin-map-bundle-v1'?data.project:data)),images=new Map();await Promise.all(Object.entries(p.assets).map(async([id,s])=>{const img=new Image();img.crossOrigin='anonymous';await new Promise((ok,no)=>{img.onload=ok;img.onerror=()=>no(Error('Không tải được ảnh map '+id));img.src=resolve(s.src)});images.set(id,img)}));return new DarkinMapPlayer(p,images)}
  constructor(p,images){this.project=p;this.renderer=new MapRenderer(p,images);this.actor={...p.spawn,radius:12};this.time=0}
+ getMonsterSpawns(options){return monsterSpawnDefinitions(this.project,options)}
  update(dt,dx=0,dy=0){this.time+=Math.max(0,dt);moveActor(this.project,this.actor,dx,dy,dt);return warpAt(this.project,this.actor.x,this.actor.y)}
  draw(ctx,width,height,{zoom=1,...opts}={}){const p=this.project,x=Math.max(0,Math.min(p.cols*p.cell-width/zoom,this.actor.x-width/zoom/2)),y=Math.max(0,Math.min(p.rows*p.cell-height/zoom,this.actor.y-height/zoom/2));this.renderer.draw(ctx,{...opts,x,y,zoom,width,height,actor:this.actor,time:this.time})}
 }

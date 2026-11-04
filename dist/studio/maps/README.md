@@ -1,5 +1,17 @@
 # Map Studio v1
 
+## Điểm sinh quái (runtime version 3)
+
+Vào **☰ → Điểm sinh quái** để đặt, kéo, đổi ID, mã quái, số lượng, bán kính
+và thời gian hồi sinh. ID điểm khác monsterId: nhiều điểm được sinh cùng một
+loại quái. Điểm lưu trong `project.monsterSpawns`, không thay spawn người chơi.
+Map cũ vẫn mở bình thường; map mới không tự có quái Night Camp.
+
+Đọc [hướng dẫn và prompt tích hợp](MONSTER-SPAWNS.md). Bundle xuất mới có
+`monsterSpawnSchema` để Codex nhận diện cấu trúc. Tải lại map-runtime.mjs v3
+để dùng `monsterSpawnDefinitions` / `MonsterSpawnController`; renderer không
+tự tạo entity hay combat. MMORPG chạy spawner ở server, offline chạy local.
+
 Trong Studio chọn **☰ → Vẽ & tạo map**, hoặc nút Vẽ map trên desktop.
 Map lưu riêng với nhân vật/pet/cánh và không ghi đè các map gốc.
 

@@ -7,6 +7,9 @@ on:
       - 'dist/game-*/**'
       - 'tools/build-studio-catalog.mjs'
       - 'tools/build-pet-studio.mjs'
+      - 'tools/build-map-studio.mjs'
+      - 'tools/lib/native-ground-source.mjs'
+      - 'dist/studio/maps/prop-library.mjs'
       - 'dist/studio/names-vi.mjs'
       - 'server/data-catalog/catalog.json'
   workflow_dispatch:
@@ -25,9 +28,10 @@ jobs:
           node-version: '22'
       - run: node tools/build-studio-catalog.mjs
       - run: node tools/build-pet-studio.mjs
+      - run: node tools/build-map-studio.mjs
       - name: Commit updated library data
         run: |
-          git add dist/studio/catalog.json dist/studio/library-index.json dist/studio/poses.json dist/studio/accessories.json dist/studio/stock-hat-fits.mjs dist/studio/pets/catalog.json
+          git add dist/studio/catalog.json dist/studio/library-index.json dist/studio/poses.json dist/studio/accessories.json dist/studio/stock-hat-fits.mjs dist/studio/pets/catalog.json dist/studio/maps/catalog.json
           if git diff --cached --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

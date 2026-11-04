@@ -1,5 +1,43 @@
 # Map Studio v1
 
+## Nhà & đồ trang trí gốc (runtime version 5)
+
+Vào **☰ → Vật thể & trang trí**, chọn nhóm **Nhà & công trình**, **Lều & đồ
+cắm trại**, **Hàng rào & cổng**, **Đèn & lửa trang trí**, **Đồ trang trí / bàn /
+thùng**, **Tượng / cột / vật thể cao** hoặc **Tất cả tài nguyên**. Tìm bằng tên
+Việt không dấu hoặc ID gốc; rê/giữ tên ảnh để xem ID khi cần phân biệt mẫu.
+
+Thư viện hiện có 1.177 ảnh môi trường/trang trí từ manifest và khai báo props
+gốc (tăng từ 377 ảnh), gồm cả m_cottage, f_farmhouse và các đồ trại. Các nhóm
+cây/đá/cầu/hoa cỏ cũ vẫn dùng được. Không nhập UI, nhân vật hoặc quái vào danh
+mục trang trí. Builder đọc đầy đủ fields2–fields7 và dữ liệu khu vực thay vì
+chỉ ba tập khai báo cũ; workflow GitHub cập nhật lại danh mục khi nguồn thay đổi.
+
+Chọn ảnh → **Đặt ảnh đang chọn trên map** → chạm để đặt. Mỗi bản sao có ID
+riêng trong map; kéo/nhân bản/xóa, quay/lật, tỷ lệ, lớp trước/sau và Tương tác &
+linh thạch đều dùng lại các công cụ hiện có. Không xuất từng căn nhà riêng:
+lưu/xuất nguyên map bundle, ảnh đang dùng được nhúng cùng map.
+
+- Giữ kích thước thế giới, neo và ảnh gốc; nhà không bị áp hệ số thu nhỏ của cây.
+- Nhà mới dùng vùng cản chân hình chữ nhật khi dữ liệu nguồn có rect. Những
+  vật thể khác có footprint gợi ý hoặc không cản nếu có khai báo đi xuyên.
+  Bật Vùng cản để kiểm tra/chỉnh đúng sàn; không chặn theo toàn bộ mái/PNG.
+- Nhà và vật thể cao có mờ khi che nhân vật; có thể tắt trong mục Vật thể đang
+  chọn. Lớp sorted sắp theo chân, không tự cho nhà luôn đè lên người đứng phía trước.
+- Map cũ giữ nguyên ảnh, ID, kích thước, neo, collider, lớp và tương tác đã lưu;
+  mở lại không tự đồng bộ đè bằng mẫu mới của thư viện. 377 mẫu cũ giữ hình học
+  và footprint gợi ý trước đó cho các lần đặt mới; tên/nhóm thư viện có thể rõ hơn.
+- Đèn/lửa/rương/nhà là **trang trí ảnh tĩnh**: chưa tự có ánh sáng cục bộ, ngọn
+  lửa động, loot, damage bẫy, chức năng ngồi hoặc nội thất/đi vào nhà. Metadata
+  sourceLight/sourceLegs chỉ tham khảo, renderer chưa tự chạy các tính năng đó.
+  Cổng/vật thể nhiều chân cần kiểm tra footprint thủ công, chưa có nhiều collider.
+
+Bundle mới dùng bộ phát version 5 để nhận house/tall/post/fence/seat/fire.
+Không đổi format darkin-map-v1 / darkin-map-bundle-v1. Game mới cần cập nhật
+runtime từ bundle.runtime.source (hoặc nút Tải map-runtime.mjs), không chỉ thay
+JSON rồi giữ validator cũ không nhận loại nhà. Chỉ ảnh dùng trong map và ảnh
+riêng được đóng gói; không tải cả 1.177 ảnh vào bundle.
+
 ## Vật thể tương tác / linh thạch (runtime version 4)
 
 Chọn vật thể đã đặt → **Cấu hình tương tác vật thể**, hoặc **☰ → Tương tác &
@@ -35,8 +73,8 @@ Map lưu riêng với nhân vật/pet/cánh và không ghi đè các map gốc.
 
 `catalog.json` được tạo từ manifest và khai báo vật thể của bản client
 `game-20261025-1758`, bằng `node tools/build-map-studio.mjs`.
-Danh mục v1 có cây, đá, cầu, bụi/cỏ/trang trí thấp; không tự đặt nhà, NPC hay
-nhân vật gốc vào map mới. Bạn có thể tải PNG/WebP/JPG riêng làm vật thể hoặc
+Danh mục đã mở rộng từ cây/đá/cầu/hoa cỏ lên cả nhà, đồ trại và trang trí;
+không tự đặt sẵn nhà, NPC hay nhân vật gốc vào map mới. Bạn có thể tải PNG/WebP/JPG riêng làm vật thể hoặc
 ô nền lặp cho phần tài nguyên còn lại. Ảnh riêng tối đa 8 MB / 16 triệu pixel.
 Vật thể nên dùng PNG/WebP nền trong suốt; JPG phù hợp hơn cho ảnh nền lặp.
 

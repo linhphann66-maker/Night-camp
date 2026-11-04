@@ -6,9 +6,9 @@ import {standalonePreview} from '../../dist/studio/maps/preview.mjs';
 const src='data:image/png;base64,aGVsbG8=';
 function asset(p,id='tree'){p.assets[id]={src,w:100,h:160,ax:.5,ay:1,kind:'tree',collider:null,walk:null};return id}
 function object(p,opts={}){const o={id:'object_'+p.objects.length,asset:asset(p),x:200,y:200,scale:1,rotation:0,flip:false,layer:'sorted',collider:null,walk:null,...opts};p.objects.push(o);return o}
-test('map catalog reuses existing environmental artwork with original anchors, no character equipment',()=>{
- const c=JSON.parse(fs.readFileSync(new URL('../../dist/studio/maps/catalog.json',import.meta.url)));assert.equal(c.assets.length,377);assert.equal(c.assets.filter(a=>a.category==='bridge').length,8);
- for(const a of c.assets){assert.ok(['tree','rock','bridge','plants'].includes(a.category));assert.ok(a.ax>=0&&a.ax<=1&&a.ay>=0&&a.ay<=1);assert.ok(fs.existsSync(new URL('../../dist-full/'+c.build+'/'+a.src,import.meta.url)));assert.ok(!/^rig_|^hat_|^glasses_/.test(a.id))}
+test('map catalog reuses original environmental/decorative artwork with valid anchors, no character equipment',()=>{
+ const c=JSON.parse(fs.readFileSync(new URL('../../dist/studio/maps/catalog.json',import.meta.url)));assert.ok(c.assets.length>=1177);assert.equal(c.assets.filter(a=>a.legacyV1).length,377);assert.equal(c.assets.filter(a=>a.category==='bridge').length,8);
+ for(const a of c.assets){assert.ok(['tree','rock','bridge','plants','building','camp','decor','fence','lights','landmark'].includes(a.category));assert.ok(a.ax>=0&&a.ax<=1&&a.ay>=0&&a.ay<=1);assert.ok(fs.existsSync(new URL('../../dist-full/'+c.build+'/'+a.src,import.meta.url)));assert.ok(!/^rig_|^hat_|^glasses_/.test(a.id))}
 });
 test('blank map is independent data with no original objects, supports custom image tiles and validates roundtrip',()=>{
  const p=createMap();assert.equal(p.objects.length,0);assert.equal(Object.keys(p.assets).length,0);assert.equal(p.terrain.length,p.cols*p.rows);p.assets.custom={src,w:64,h:64,ax:0,ay:0,kind:'ground'};p.terrain[0]='custom';validateMap(JSON.parse(JSON.stringify(p)));

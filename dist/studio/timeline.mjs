@@ -1,10 +1,11 @@
+import {newAnimationId} from './animation-identity.mjs';
 const clone=value=>structuredClone(value);
 const rounded=value=>Math.round(value*1e6)/1e6;
 function poseCheck(pose){if(!pose||Object.values(pose).some(v=>typeof v!=='boolean'&&!Number.isFinite(v)))throw Error('Tư thế không hợp lệ')}
 export function blankClip({name,kind='loop',dur=1,pose}){
  poseCheck(pose);
  if(typeof name!=='string'||!name.trim()||!['loop','walk','attack','pose'].includes(kind)||!Number.isFinite(dur)||dur<.1||dur>30)throw Error('Tên, loại hoặc thời lượng animation không hợp lệ');
- return {name:name.trim(),kind,dur,hit:Math.min(dur*.4,dur),keys:[{t:0,curve:'inout',P:clone(pose)}]};
+ return {id:newAnimationId(),name:name.trim(),kind,dur,hit:Math.min(dur*.4,dur),keys:[{t:0,curve:'inout',P:clone(pose)}]};
 }
 export function appendInheritedFrame(original,index,pose,step=.1){
  poseCheck(pose);

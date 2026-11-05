@@ -1,25 +1,46 @@
 // Dependency-free companion for games consuming accessory-only packages.
 export const ACCESSORY_FORMAT='darkin-accessory-pack-v1';
+export const ACCESSORY_RUNTIME_VERSION=2;
 export const ORIGINAL_HEAD_ID='nightcamp-head-original-v1';
 export const FIT_FIELDS=['socket','layer','w','h','scale','x','y','rotation','anchor','headFit'];
-export const validMountId=id=>typeof id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(id);
+export const validMountId=id=>typeof id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(id)&&!['constructor','prototype','__proto__'].includes(id);
 export function fingerprint(value){let h=2166136261;for(const c of JSON.stringify(value)){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return (h>>>0).toString(16).padStart(8,'0')}
 export function targetSignature(part){
  if(!part)throw Error('Thiếu bộ phận để kiểm tra cấu hình gắn');
  const round=v=>typeof v==='number'?Math.round(v*10000)/10000:Array.isArray(v)?v.map(round):v;
  return fingerprint([round(part.w),round(part.h),Object.keys(part.joints||{}).sort().map(k=>[k,round(part.joints[k])]),round(part.head||null)]);
 }
-export function mountTarget(a){return a.wingRig||a.socket==='back'?'body':['head','face'].includes(a.socket)?'head':null}
+export function mountTarget(a){const socket=a.animationBase?.socket||a.socket;return a.wingRig||socket==='back'?'body':['head','face'].includes(socket)?'head':null}
 export function fitTransform(a){return Object.fromEntries(FIT_FIELDS.filter(k=>a[k]!==undefined).map(k=>[k,structuredClone(a[k])]))}
+export function validateAnimationProfiles(a){
+ const check=t=>{if(!t||Object.keys(t).some(k=>!FIT_FIELDS.includes(k))||!['head','face','back','handF','handB'].includes(t.socket)||!['front','back'].includes(t.layer)||!['w','h','scale','x','y','rotation'].every(k=>Number.isFinite(t[k]))||t.w<1||t.w>2000||t.h<1||t.h>2000||t.scale<.05||t.scale>10||Math.abs(t.x)>2000||Math.abs(t.y)>2000||Math.abs(t.rotation)>20*Math.PI||!Array.isArray(t.anchor)||t.anchor.length!==2||!t.anchor.every(v=>Number.isFinite(v)&&v>=0&&v<=1))throw Error('Điểm neo theo hoạt ảnh không hợp lệ')};
+ if(a.animationBase!==undefined)check(a.animationBase);
+ if(a.animationProfiles===undefined)return a;
+ if(!Array.isArray(a.animationProfiles)||a.animationProfiles.length>500)throw Error('Tối đa 500 cấu hình hoạt ảnh / phụ kiện');
+ const seen=new Set();for(const f of a.animationProfiles){const key=f?.animationId+':'+(f?.targetId||'');if(!validMountId(f?.animationId)||seen.has(key)||f.targetId!==undefined&&(!['head','body'].includes(f.target)||!validMountId(f.targetId)||!/^[a-f0-9]{8}$/.test(f.signature||'')))throw Error('ID hoạt ảnh / đầu / thân không hợp lệ hoặc trùng');seen.add(key);check(f.transform)}return a;
+}
+// Pure: resolving run -> shoot -> idle must never leak the previous socket.
+export function animationProfileFor(item,animationId,character={}){return item.animationProfiles?.find(f=>f.animationId===animationId&&(!f.targetId||f.targetId===character[f.target==='body'?'bodyId':'headId']&&f.signature===(character.mountSignatures?.[f.target]||(character.parts?.[f.target==='body'?'torso':'head']&&targetSignature(character.parts[f.target==='body'?'torso':'head'])))))}
+export function resolveAnimationAccessory(item,animationId,character={}){
+ const a=structuredClone(item);if(a.animationBase)Object.assign(a,structuredClone(a.animationBase));
+ const profile=animationProfileFor(a,animationId,character);if(profile)Object.assign(a,structuredClone(profile.transform));return a;
+}
+export function saveAnimationProfile(a,animationId,character={}){
+ if(!validMountId(animationId))throw Error('Hoạt ảnh chưa có ID cố định');a.animationBase||=fitTransform(a);
+ const target=mountTarget(a),targetId=target?character[target==='body'?'bodyId':'headId']:undefined,signature=target&&character.parts?.[target==='body'?'torso':'head']&&targetSignature(character.parts[target==='body'?'torso':'head']);
+ a.animationProfiles=(a.animationProfiles||[]).filter(f=>!(f.animationId===animationId&&f.targetId===targetId));a.animationProfiles.push({animationId,...(targetId?{target,targetId,signature}:{}),transform:fitTransform(a)});validateAnimationProfiles(a);return a;
+}
+export function accessoryForAnimation(inventory,animationId){return inventory.map(a=>resolveAnimationAccessory(a,animationId))}
 export function validateProfile(f){
  const key=f?.target==='head'?'headId':f?.target==='body'?'bodyId':null,t=f?.transform;
  if(!key||!validMountId(f[key])||!/^[a-f0-9]{8}$/.test(f.signature||'')||!t||Object.keys(t).some(k=>!FIT_FIELDS.includes(k))||!['head','face','back'].includes(t.socket)||!['front','back'].includes(t.layer)||!['w','h','scale','x','y','rotation'].every(k=>Number.isFinite(t[k]))||t.w<1||t.w>2000||t.h<1||t.h>2000||t.scale<.05||t.scale>10||Math.abs(t.x)>2000||Math.abs(t.y)>2000||Math.abs(t.rotation)>20*Math.PI||!Array.isArray(t.anchor)||t.anchor.length!==2||!t.anchor.every(v=>Number.isFinite(v)&&v>=0&&v<=1)||(f.target==='body')!==(t.socket==='back'))throw Error('Cấu hình gắn đầu / thân không hợp lệ');
  return f;
 }
 export function validateAccessoryPack(pack){
- if(pack?.format!==ACCESSORY_FORMAT||pack.version!==1||!Array.isArray(pack.items)||!pack.items.length||pack.items.length>32)throw Error('Không đúng gói phụ kiện v1 (tối đa 32 món)');
+ if(pack?.format!==ACCESSORY_FORMAT||![1,2].includes(pack.version)||!Array.isArray(pack.items)||!pack.items.length||pack.items.length>32)throw Error('Không đúng gói phụ kiện v1/v2 (tối đa 32 món)');
  const ids=new Set();
  for(const a of pack.items){
+  validateAnimationProfiles(a);
   if(!validMountId(a?.accessoryId)||ids.has(a.accessoryId))throw Error('Mã phụ kiện không hợp lệ hoặc trùng');ids.add(a.accessoryId);
   if(typeof a.id!=='string'||!['head','face','handF','handB','back'].includes(a.socket)||!['front','back'].includes(a.layer)||!['w','h','scale','x','y','rotation'].every(k=>Number.isFinite(a[k]))||a.w<1||a.w>2000||a.h<1||a.h>2000||a.scale<.05||a.scale>10||Math.abs(a.x)>2000||Math.abs(a.y)>2000||Math.abs(a.rotation)>20*Math.PI||!Array.isArray(a.anchor)||a.anchor.length!==2||!a.anchor.every(v=>Number.isFinite(v)&&v>=0&&v<=1)||(a.visible!==undefined&&typeof a.visible!=='boolean')||(a.wingRig&&(a.socket!=='back'||a.layer!=='back')))throw Error('Thông số phụ kiện không hợp lệ');
   if(typeof a.name!=='string'||!Array.isArray(a.mountProfiles)||a.mountProfiles.length>100)throw Error('Phụ kiện thiếu danh sách cấu hình');
@@ -32,9 +53,9 @@ export function validateAccessoryPack(pack){
 }
 // Never infer a fit from an outfit name or silently use another head's fit.
 // Pass parts as well as IDs to catch accidental reuse after changing geometry.
-export function resolveAccessory(item,character){
- const a=structuredClone(item),target=mountTarget(a);delete a.mountStatus;
- if(!target)return a;
+export function resolveAccessory(item,character,animationId=character.animationId){
+ const a=structuredClone(item);if(a.animationBase)Object.assign(a,structuredClone(a.animationBase));const target=mountTarget(a);delete a.mountStatus;
+ if(!target)return resolveAnimationAccessory(a,animationId);
  const key=target==='head'?'headId':'bodyId',id=character[key],part=character.parts?.[target==='head'?'head':'torso'];
  if(!validMountId(id))throw Error('Nhân vật thiếu '+key);
  const profiles=(a.mountProfiles||[]).filter(f=>f.target===target&&f[key]===id);
@@ -42,10 +63,12 @@ export function resolveAccessory(item,character){
  if(!signature)throw Error('Cần parts hoặc mountSignatures để kiểm tra đúng kích thước '+key);
  const fit=profiles.find(f=>f.signature===signature);
  if(!fit)throw Error('Chưa có cấu hình '+a.name+' cho '+key+'='+id+' ('+signature+')');
- validateProfile(fit);for(const k of FIT_FIELDS)delete a[k];Object.assign(a,structuredClone(fit.transform));return a;
+ validateProfile(fit);for(const k of FIT_FIELDS)delete a[k];Object.assign(a,structuredClone(fit.transform));
+ const animation=animationProfileFor(a,animationId,character);if(animation)Object.assign(a,structuredClone(animation.transform));return a;
 }
+export function mergeAccessoryProfiles(old,item){const a=structuredClone(item);if(!old)return a;for(const [field,key]of [['mountProfiles',f=>f.target+':'+(f.headId||f.bodyId)+':'+f.signature],['animationProfiles',f=>f.animationId+':'+(f.targetId||'')]]){const rows=new Map((old[field]||[]).map(f=>[key(f),structuredClone(f)]));for(const f of a[field]||[])rows.set(key(f),f);if(rows.size)a[field]=[...rows.values()]};a.animationBase||=structuredClone(old.animationBase);return a}
 export function equipAccessory(inventory,item,character){
- const a=resolveAccessory(item,character);a.id=a.accessoryId||a.id;a.visible=true;
+ const a=resolveAccessory(mergeAccessoryProfiles(inventory.find(v=>(v.accessoryId||v.id)===(item.accessoryId||item.id)),item),character);a.id=a.accessoryId||a.id;a.visible=true;
  const type=v=>v.wingRig?'wings':v.category||({head:'hat',face:'glasses',handF:'weapon',handB:'weapon',back:'wings'})[v.socket];
  const next=inventory.filter(v=>(v.accessoryId||v.id)!==(a.accessoryId||a.id)).map(v=>({...structuredClone(v),visible:type(v)===type(a)?false:v.visible}));next.push(a);return next;
 }

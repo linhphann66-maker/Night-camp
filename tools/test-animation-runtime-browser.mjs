@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {makeAttachment} from '../dist/studio/attachments.mjs';
+import {builtinAnimationId} from '../dist/studio/animation-identity.mjs';
+import {saveAnimationProfile} from '../dist/studio/accessory-runtime.mjs';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright'),b=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE||'/usr/bin/chromium',args:['--no-sandbox']}),p=await b.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+try{
+ const entry=JSON.parse(fs.readFileSync(new URL('../dist/studio/accessories.json',import.meta.url))).find(e=>e.id==='sword'),a={...makeAttachment(entry),accessoryId:'test-bow',category:'weapon',mountProfiles:[]};a.src='data:image/png;base64,'+fs.readFileSync(new URL('../dist-full/game-20261025-1758/assets/sword.png',import.meta.url)).toString('base64');saveAnimationProfile(a,builtinAnimationId('run'));a.socket='handB';a.x=25;saveAnimationProfile(a,builtinAnimationId('idle'));const pack={format:'darkin-accessory-pack-v1',version:2,items:[a]};
+ await p.goto(process.argv[2]||'http://127.0.0.1:8163/cutout-demo/');await p.waitForFunction(()=>window.NC?.drawRig);
+ const results=await p.evaluate(async pack=>{const {CutoutPlayer}=await import('./runtime/player.mjs'),{resolveAccessory}=await import('./runtime/accessory-runtime.mjs'),spec=await fetch('./traveler.character.json').then(r=>r.json()),player=await CutoutPlayer.load(spec,new URL('./',location.href)),originalClips=JSON.stringify(player.spec.clips);await player.addAccessories(pack);
+ const canvases=[0,1].map(()=>Object.assign(document.createElement('canvas'),{width:400,height:400})),out=[];
+ for(const name of ['run','idle','run']){player.play(name);player.update(.1);const c=player.spec.clips[player.name],ctxs=canvases.map(c=>c.getContext('2d'));ctxs.forEach(c=>c.clearRect(0,0,400,400));player.draw(ctxs[0],180,280,1.3);const live=NC.ITEMS[player.equip.top].attachments;NC.ITEMS[player.equip.top].attachments=live.map(a=>resolveAccessory(a,player.spec,c.id));NC.drawRig(ctxs[1],player.rig,player.equip,{...player.pose,face:player.face,attachmentTime:player.attachmentTime,animationEditing:true},180,280,{scale:1.3,noWeapon:true});NC.ITEMS[player.equip.top].attachments=live;const images=ctxs.map(c=>c.getImageData(0,0,400,400).data);out.push({name,id:c.id,equal:images[0].every((v,i)=>v===images[1][i])})}
+ const time=player.time;await player.addAccessories(pack);if(player.time!==time||JSON.stringify(player.spec.clips)!==originalClips||player.spec.attachments.length!==1)throw Error('Changing accessories reset animation or duplicated item');
+ const clip=structuredClone(spec.clips.attack);clip.id='animation-custom-shoot';clip.name='Bắn cung';player.addAnimation({format:'darkin-animation-pack-v1',version:1,animationId:clip.id,clip},{alias:'shoot_bow'});player.play(clip.id);player.update(.1);if(player.name!=='shoot_bow')throw Error('ID lookup failed');player.dispose();return out},pack);
+ assert.ok(results.every(r=>r.equal));assert.deepEqual(errors,[]);console.log('PASS real CutoutPlayer: pixel-identical per-animation sockets run → idle → run; repeated accessory update preserves clips/time and inventory ID; custom animation-only install and playback by stable ID.');
+}finally{await b.close()}

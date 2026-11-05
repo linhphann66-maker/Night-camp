@@ -7,6 +7,8 @@ import {createWingCatalog,prepareWingProject,balanceWingSizes} from '../wings.mj
 import {mountWingPreview} from '../wing-preview.mjs';
 import {mountWingImporter} from '../wing-import.mjs';
 import {PET_NAMES,petName} from '../names-vi.mjs';
+import {mountSavedLibrary} from '../saved-library-ui.mjs';
+import {ensureAnimationId} from '../animation-identity.mjs';
 const wingMode=new URLSearchParams(location.search).get('mode')==='wings';
 const draftKey=wingMode?'nightcamp.wing.cutout.v1':'nightcamp.pet.cutout.v1';
 const terminology=text=>wingMode?text.replace(/thú cưng/gi,'cánh').replace(/pet/gi,'cánh'):text;
@@ -35,7 +37,7 @@ for(const input of document.querySelectorAll('[pattern]'))if(input.pattern==='[a
 $('poseHide').closest('label').insertAdjacentHTML('afterend','<button id="restoreJoint">Nối lại khớp bộ phận (frame này)</button><button id="restoreAllJoints">Nối lại mọi khớp lệch (frame này)</button><p class="hint">Khôi phục độ dịch từ mẫu gốc, giữ góc đang chỉnh. Chỉ thay pose hiện tại; bấm Ghi pose để lưu. Không xóa animation.</p>');
 $('stageHint').textContent='Kéo vòng ở bàn chân / đầu / đuôi để tạo pose, giữ khớp nối · Ghi pose để lưu';
 function checkpoint(){state.undo.push(JSON.stringify(state.project));if(state.undo.length>50)state.undo.shift();state.redo=[]}
-function stash(){state.project.clips||={};state.project.clips[state.project.activeClipId||'custom']=clone(state.project.clip)}
+function stash(){state.project.clips||={};ensureAnimationId(state.project.clip,{sourceKey:state.project.id+'_'+(state.project.activeClipId||'custom')});state.project.clips[state.project.activeClipId||'custom']=clone(state.project.clip)}
 function persist(){stash();try{localStorage.setItem(draftKey,JSON.stringify(state.project))}catch{message('Bộ nhớ nháp pet đầy. Bấm Lưu project để tải bản sao.')}}
 async function image(src){const url=source.assetURL(src);if(!cache.has(url))cache.set(url,new Promise((ok,no)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>ok(img);img.onerror=()=>{cache.delete(url);no(Error('Không tải được ảnh '+src.slice(0,100)))};img.src=url}));return cache.get(url)}
 function busy(value){state.loading=value;document.querySelector('main').setAttribute('aria-busy',String(value));for(const n of document.querySelectorAll('main button,main input,main select,#desktopSave,#applyWings'))n.disabled=value;if(!value)updateModeControls()}
@@ -196,7 +198,7 @@ function draw(){
 function download(name,data,type='application/json'){const url=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000)}
 async function portable(){stash();const p=clone(state.project);await Promise.all(p.spriteOrder.map(async id=>{const s=p.sprites[id];if(s.src.startsWith('data:'))return;const img=await image(s.src),canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;canvas.getContext('2d').drawImage(img,0,0);s.src=canvas.toDataURL('image/png')}));return validatePet(p)}
 let runtimeText;async function runtime(){if(!runtimeText){const r=await fetch(new URL('./runtime.mjs',import.meta.url));if(!r.ok)throw Error('Không tải được bộ phát pet');runtimeText=await r.text()}return runtimeText}
-on('save','click',async()=>{const p=await portable();download(p.id+(wingMode?'.wing-cutout.json':'.pet-cutout.json'),JSON.stringify(p,null,2));message('Đã lưu pet kèm rig, ảnh và bộ animation')});on('desktopSave','click',()=>$('save').click());
+on('save','click',async()=>savedShelf.saveAndDownload(p=>p.id+(wingMode?'.wing-cutout.json':'.pet-cutout.json')));on('desktopSave','click',()=>$('save').click());
 on('export','click',async()=>{const p=await portable();download(p.id+(wingMode?'.wing-game-bundle.json':'.pet-game-bundle.json'),JSON.stringify({format:wingMode?'nightcamp-wing-cutout-export-v1':'nightcamp-pet-cutout-export-v1',project:p,runtime:{file:'pet-runtime.mjs',source:await runtime()},usage:wingMode?'Rigid cutout wing: PetCutoutPlayer.load(bundle.project), play(clipId), update(dt), draw at your character back socket behind the body. In Studio use Gắn vào nhân vật, then save the HERO project for Cutout Playground. This wing-only bundle is not a six-part hero project.':'Use PetCutoutPlayer.load(bundle.project), player.play(clipId), player.update(dt), player.draw(ctx,x,y,scale). Data only: no summon/combat AI.'},null,2));message('Đã xuất bundle pet kèm ảnh, animation và mã bộ phát độc lập')});
 on('runtime','click',async()=>download('pet-runtime.mjs',await runtime(),'text/javascript'));
 on('standalone','click',async()=>{
@@ -211,13 +213,14 @@ on('menuButton','click',()=>{$('petMenu').showModal();$('menuButton').setAttribu
 on('back','click',()=>{if(parent!==window)parent.postMessage({type:wingMode?'nightcamp.wing.close':'nightcamp.pet.close'},location.origin);else location.href='../index.html'});
 let active=true;window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==parent)return;if(e.data?.type==='nightcamp.pet.pause'){pause();active=false}else if(e.data?.type==='nightcamp.pet.resume')active=true});
 let last=0;function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;if(!active){requestAnimationFrame(frame);return}if(state.playing&&state.project){const c=state.project.clip;state.time+=dt*Number($('speed').value);if(state.time>c.dur){if(['loop','walk'].includes(c.kind))state.time%=c.dur;else{state.time=c.dur;pause()}}state.pose=samplePet(c,state.time);$('scrub').value=state.time;$('clock').textContent=state.time.toFixed(2)+' s';renderPose()}try{draw()}catch(error){pause();message('Lỗi hiển thị pet: '+error.message);console.error(error)}requestAnimationFrame(frame)}
+const savedShelf=mountSavedLibrary({kind:wingMode?'wings':'pets',label:wingMode?'Cánh':'Thú cưng',anchor:$('pet').closest('label'),picker:$('pet'),getProject:()=>state.project,portable,load:async p=>{checkpoint();await adopt(validatePet(p))},message,download,afterSave:persist});
 busy(true);safe(async()=>{
  source=await connectSource(!!window.STUDIO_GITHUB,new URL('../',import.meta.url));
  catalog=wingMode?createWingCatalog(source.catalog):await fetch(new URL('./catalog.json',import.meta.url)).then(r=>{if(!r.ok)throw Error('Không tải được danh mục pet');return r.json()});
  if(!wingMode)for(const [id,p]of Object.entries(catalog.rigs))p.name=petName(id,p.name);
  if(wingMode)wingPreview=await mountWingPreview(image);
  const initial=wingMode?'custom_wings':'wolf';options($('pet'),Object.entries(catalog.rigs).map(([id,p])=>[id,p.name]));let p={...clone(catalog.rigs[initial]),activeClipId:'idle'};const saved=localStorage.getItem(draftKey);if(saved)try{p=validatePet(JSON.parse(saved))}catch{message('Nháp cũ không hợp lệ; mở khung mặc định')}
- await adopt(p);$('pet').value=catalog.rigs[p.id]?p.id:initial;message(source.warning||(wingMode?'Cánh trống · chọn khung hai bên hoặc mẫu Falcon, hoặc tự dựng xương.':'Sẵn sàng · 7 pet cutout · 29 chuyển động mẫu · chưa có mesh'));requestAnimationFrame(frame);
+ await savedShelf.refresh();await adopt(p);$('pet').value=p.studioLibraryId?'saved:'+p.studioLibraryId:catalog.rigs[p.id]?p.id:initial;message(source.warning||(wingMode?'Cánh trống · chọn khung hai bên hoặc mẫu Falcon, hoặc tự dựng xương.':'Sẵn sàng · 7 pet cutout · 29 chuyển động mẫu · chưa có mesh'));requestAnimationFrame(frame);
  if(wingMode&&parent!==window){busy(true);message('Đang nạp nhân vật preview…');parent.postMessage({type:'nightcamp.wing.ready'},location.origin)}
 })();
 if(wingMode){

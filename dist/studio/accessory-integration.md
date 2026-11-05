@@ -1,5 +1,39 @@
 # Phụ kiện & cánh theo đầu/thân
 
+## Mới: neo theo ID hoạt ảnh (runtime v2)
+
+Trong Animation, chọn / nạp clip trước. Mỗi clip có `clip.id` cố định, độc lập với tên hiển thị. Run/idle gốc nhận ID xác định theo nguồn; animation tự tạo nhận ID đúng một lần. Đổi tên, sửa frame, lưu, nhập lại và reload **không sinh ID khác**. Để tạo hoạt ảnh độc lập, dùng Tạo animation mới thay vì chỉ đổi tên clip cũ.
+
+1. **Lưu hoạt ảnh vào thư viện** để nạp lại trong Clip có sẵn. **Xuất riêng hoạt ảnh + ID** tạo `*.animation-pack.json`, không kèm ảnh nhân vật.
+2. Chọn vũ khí rồi chỉnh điểm gắn trên clip đó. Chỉnh vũ khí cầm tay tự lưu neo riêng cho clip hiện tại; có thể bấm **Lưu điểm neo cho hoạt ảnh hiện tại**. Ví dụ run dùng `handF`, bắn cung dùng `handB`. Đừng dựa vào nhãn phải/trái tuyệt đối: handF/B là tay gần/xa trong rig và lật theo hướng nhân vật.
+3. Xuất riêng phụ kiện: `animationProfiles[]` mang `animationId` + transform (socket, x/y, góc, kích thước, neo…). Một accessoryId giữ nhiều cấu hình. Khi nhập hai gói cùng món, các cấu hình khác ID được hợp nhất, không xóa cấu hình đã có.
+4. Animation chưa có cấu hình dùng neo mặc định, không giữ nhầm neo của hành động vừa phát. Mũ/cánh có neo theo clip còn kiểm tra đúng headId/bodyId + dấu hình học; không áp dụng lên đầu/thân khác.
+
+Gói phụ kiện giữ format `darkin-accessory-pack-v1`, `version: 2` khi có neo theo hoạt ảnh. Runtime v2 đọc được cả gói v1 cũ. Cần cập nhật bộ ghép **và renderer/player một lần**; chỉ chép JSON vào game có runtime cũ sẽ không tự hoạt động. Dùng toàn bộ `cutout-runtime.zip` trong Studio hoặc các file cùng phiên bản ở `cutout-demo/runtime/`.
+
+Ví dụ với CutoutPlayer mới:
+
+```js
+// Cài animation vào game một lần. alias nối hành động của game với clip.id.
+const animationPack = await fetch('/assets/animations/ban-cung.animation-pack.json').then(r => r.json());
+player.addAnimation(animationPack, {alias: 'shoot_bow'});
+
+// Những lần sau chỉ cần nạp gói phụ kiện đã căn trên animationId đó.
+const accessoryPack = await fetch('/assets/accessories/cung.accessory-pack.json').then(r => r.json());
+await player.addAccessories(accessoryPack); // nạp ảnh, hợp nhất profile, thay món cùng loại
+player.play('shoot_bow'); // hoặc player.play(animationPack.animationId)
+```
+
+Không suy ra ID từ tên file, thời điểm upload hoặc ID ngẫu nhiên mỗi lần play. Giữ dữ liệu animation gốc khi cập nhật trang bị. Nếu tự viết renderer, mỗi lần đổi hành động gọi `resolveAccessory(item, character, activeClip.id)` trên bản dữ liệu gốc và cập nhật transform của texture đang vẽ. Truyền `animationId`, `headId`, `bodyId`, `mountSignatures` trong pose khi dùng renderer NC. Không dùng eval để chạy `bundle.code`.
+
+Thư viện Studio: Rig/Pet/Cánh có sẵn có nhóm **Đã lưu của bạn**. Map có hai thư viện riêng: nguyên map và vật thể/trang trí/nền đã tải. Phụ kiện lưu ảnh cùng điểm neo; Skill/VFX lưu project và ảnh. **Lưu vào thư viện** cập nhật bản đang sửa; **Lưu thành bản mới** tạo mục khác nhưng giữ ID hoạt ảnh/phụ kiện để còn liên kết. Muốn một phụ kiện độc lập, đổi accessoryId có chủ ý. Lưu project vẫn tải thêm bản sao; nếu IndexedDB bị chặn/đầy, sẽ tải bản sao và báo chưa lưu được thư viện.
+
+Đây là dữ liệu cục bộ **theo trình duyệt và origin Studio**, không phải lưu cloud. Xóa dữ liệu web / đổi trình duyệt / đổi tên miền có thể mất hoặc không nhìn thấy bản lưu. Dùng **Sao lưu toàn bộ thư viện** và **Nhập bản sao thư viện** để chuyển thiết bị. Sao lưu chứa ảnh và toàn bộ ID; không tự tái tạo ID khi nhập. Không tự đẩy thư viện cá nhân lên GitHub.
+
+### Prompt cập nhật game mới
+
+> Cập nhật runtime CutoutPlayer và accessory-runtime v2 từ gói tôi gửi, giữ cơ chế game hiện tại. Nhập animation-pack bằng animationId/clip.id ổn định, ánh xạ hành động game → ID, không tạo random ID lúc tải/phát. Nhập accessory-pack v1/v2: cùng accessoryId thì cập nhật ảnh, hợp nhất mountProfiles theo đầu/thân và animationProfiles theo animationId + targetId, chỉ cấu hình cùng khóa mới bị thay. Khi đổi hành động, chọn neo đúng activeClip.id; không có thì dùng neo mặc định. Không đổi animation/nhân vật khi chỉ cập nhật vũ khí. Thiếu clip thì cảnh báo ID chưa cài và dùng fallback, không crash. Giữ headId/bodyId/mountSignatures và kiểm tra đúng hình học. Chỉ một món hiển thị mỗi loại; các món ẩn vẫn ở danh sách. Test carry tay gần → shoot tay xa → run → idle và reload; test cập nhật riêng gói vũ khí mà không nạp lại animation. Multiplayer chỉ đồng bộ ID và phiên bản dữ liệu đã phát hành; server vẫn kiểm tra sở hữu trang bị, không nhận code hoặc ảnh tùy ý từ client.
+
 ## Trong Studio
 
 1. Nhân vật & ảnh bộ phận → Mã đầu & thân cho game. Đầu Traveler gốc (như demo) có `headId: nightcamp-head-original-v1`; nút **Dùng đầu Traveler gốc như demo** chọn đúng cả ảnh, kích thước và mã, không chỉ đổi nhãn. Các đầu có hình học khác có mã riêng. Mỗi thân có `bodyId` riêng.

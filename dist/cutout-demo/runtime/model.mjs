@@ -1,5 +1,6 @@
 import {validateAttachments} from './attachments.mjs';
 import {validateMountProject} from './mount-profiles.mjs';
+import {ensureAnimationId,validAnimationId} from './animation-identity.mjs';
 export const PARTS = ['head','torso','armF','armB','legF','legB'];
 export const CURVES = { lin:t=>t, in:t=>t*t, out:t=>1-(1-t)**2, inout:t=>t<.5?2*t*t:1-2*(1-t)**2, snap:t=>1-(1-t)**4, back:t=>{const u=t-1;return u*u*(3.2*u+2.2)+1}, step:()=>0 };
 export function sample(clip, time) {
@@ -19,9 +20,11 @@ export function validate(p) {
   validateAttachments(p.attachments);
   validateMountProject(p);
   const c=p.clip;
+  if(c?.id!==undefined&&!validAnimationId(c.id))fail('ID hoạt ảnh không hợp lệ');
   if(!c||!Number.isFinite(c.dur)||c.dur<.1||c.dur>30||!Array.isArray(c.keys)||!c.keys.length||c.keys.length>2000)fail('Clip hoặc thời lượng không hợp lệ');
   if(!['walk','loop','attack','pose'].includes(c.kind)||typeof c.name!=='string'||!c.name.trim())fail('Tên / loại clip không hợp lệ');
   if(!Number.isFinite(c.hit)||c.hit<0||c.hit>c.dur)fail('Thời điểm trúng đòn nằm ngoài clip');
+  if(p.animationClips!==undefined){if(!p.animationClips||Array.isArray(p.animationClips)||typeof p.animationClips!=='object'||Object.keys(p.animationClips).length>256)fail('Bộ hoạt ảnh tối đa 256 clip');for(const [id,clip]of Object.entries(p.animationClips)){if(!validAnimationId(id)||clip?.id!==id)fail('ID trong bộ hoạt ảnh không khớp');validate({...p,animationClips:undefined,clip})}}
   const seen=new Set();
   for(const k of c.keys){if(!Number.isFinite(k.t)||k.t<0||k.t>c.dur||seen.has(k.t)||!CURVES[k.curve]||!k.P||Object.values(k.P).some(v=>typeof v!=='boolean'&&!Number.isFinite(v)))fail('Keyframe không hợp lệ hoặc trùng thời điểm');seen.add(k.t)}
   const joints={head:['neck'],torso:['pelvis','neck','shoulderL','shoulderR','hipL','hipR'],armF:['shoulder','hand'],armB:['shoulder','hand'],legF:['hip','foot'],legB:['hip','foot']};
@@ -31,8 +34,9 @@ export function validate(p) {
 }
 export function gameExport(project) {
   validate(project);
-  const clip=structuredClone(project.clip);clip.aim=false;
-  const id=clip.name.replace(/[^a-zA-Z0-9_-]/g,'_')||'custom_clip';
+  const clip=structuredClone(project.clip);clip.aim=false;ensureAnimationId(clip);
+  const id=clip.id;
+  const animations=structuredClone(project.animationClips||{});animations[id]=clip;for(const c of Object.values(animations))c.aim=false;
   const rig=project.rig.replace(/[^a-zA-Z0-9_-]/g,'_')||'custom_rig';
   const sprites={}; const images=[];
   for(const part of PARTS){const s=structuredClone(project.parts[part]);if(s.src.startsWith('data:')){const ext=s.src.startsWith('data:image/webp')?'webp':'png';const file=`rig_${rig}_${part}.${ext}`;images.push({file,data:s.src});s.src='assets/'+file}sprites[`rig_${rig}_${part}`]=s}
@@ -40,5 +44,5 @@ export function gameExport(project) {
     const register=(s,key)=>{if(s.src.startsWith('data:')){const ext=s.src.startsWith('data:image/webp')?'webp':'png',file=key+'.'+ext;images.push({file,data:s.src});s.src='assets/'+file}sprites[key]={src:s.src,w:s.w,h:s.h,ax:0,ay:0};s.sprite=key};
     if(a.wingRig)for(const id of a.wingRig.spriteOrder)register(a.wingRig.sprites[id],name+'_'+id);else register(a,name);
     return a});
-  return {id,rig,headId:project.headId,bodyId:project.bodyId,mountSignatures:structuredClone(project.mountSignatures),images,attachments,code:`// Load after assets/manifest.js and js/poselib_data.js, before sprite loading and js/poselib.js.\nwindow.NC = window.NC || {};\nNC.ASSET_MANIFEST = Object.assign(NC.ASSET_MANIFEST || {}, ${JSON.stringify(sprites,null,2)});\nNC.POSE_LIB = Object.assign(NC.POSE_LIB || {}, ${JSON.stringify({[id]:clip},null,2)});\nNC.RIG_ATTACHMENTS = Object.assign(NC.RIG_ATTACHMENTS || {}, ${JSON.stringify({[rig]:attachments},null,2)});\n`};
+  return {id,animationId:id,animations,rig,headId:project.headId,bodyId:project.bodyId,mountSignatures:structuredClone(project.mountSignatures),images,attachments,code:`// Load after assets/manifest.js and js/poselib_data.js, before sprite loading and js/poselib.js.\nwindow.NC = window.NC || {};\nNC.ASSET_MANIFEST = Object.assign(NC.ASSET_MANIFEST || {}, ${JSON.stringify(sprites,null,2)});\nNC.POSE_LIB = Object.assign(NC.POSE_LIB || {}, ${JSON.stringify(animations,null,2)});\nNC.RIG_ATTACHMENTS = Object.assign(NC.RIG_ATTACHMENTS || {}, ${JSON.stringify({[rig]:attachments},null,2)});\n`};
 }

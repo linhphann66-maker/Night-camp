@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import {builtinAnimationId} from '../dist/studio/animation-identity.mjs';
+import {targetSignature,ORIGINAL_HEAD_ID} from '../dist/studio/accessory-runtime.mjs';
 const root=path.resolve(import.meta.dirname,'..'), target=path.join(root,'dist/cutout-demo');
 const source=path.join(root,'dist-full/game-20261025-1758');
 fs.mkdirSync(path.join(target,'assets'),{recursive:true});
@@ -21,13 +23,13 @@ for(const [id,animation,dur,kind] of [['idle','idle',3.2,'loop'],['walk','walk',
  const count=Math.ceil(dur*30),keys=Array.from({length:count+1},(_,i)=>{const t=i/count*dur;const P=NC.Anim.sample(animation,t,{...c,walk:t/dur*Math.PI*2});return {t,curve:'lin',P}});
  if(kind!=='attack')keys.at(-1).P=structuredClone(keys[0].P);
  const hit=NC.Anim.CLIPS[attack].ev?.find(e=>e[1]==='hit')?.[0]??dur*.4;
- clips[id]={name:id,kind,dur,hit:kind==='attack'?hit:0,keys};
+ clips[id]={id:builtinAnimationId(animation),name:id,kind,dur,hit:kind==='attack'?hit:0,keys};
 }
 const sword=NC.ASSET_MANIFEST.sword;
 for(const s of [...Object.values(parts),sword])fs.copyFileSync(path.join(source,s.src),path.join(target,s.src));
 fs.copyFileSync(path.join(source,'js/avatar.js'),path.join(target,'runtime/avatar.js'));
 fs.copyFileSync(path.join(root,'dist/studio/model.mjs'),path.join(target,'runtime/model.mjs'));
 fs.copyFileSync(path.join(root,'dist/studio/attachments.mjs'),path.join(target,'runtime/attachments.mjs'));
-fs.writeFileSync(path.join(target,'traveler.character.json'),JSON.stringify({format:'cutout-character-v1',rig:'traveler',parts,weapon:{...weapon,spriteData:sword},clips}));
+fs.writeFileSync(path.join(target,'traveler.character.json'),JSON.stringify({format:'cutout-character-v1',rig:'traveler',headId:ORIGINAL_HEAD_ID,bodyId:'nightcamp-body-traveler-v1',mountSignatures:{head:targetSignature(parts.head),body:targetSignature(parts.torso)},parts,weapon:{...weapon,spriteData:sword},clips}));
 console.log('Built independent traveler demo: 6 cutout parts, sword, 4 baked clips, local renderer.');
 await import('./build-cutout-runtime.mjs');

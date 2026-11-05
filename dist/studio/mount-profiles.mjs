@@ -1,5 +1,5 @@
 import {validateAttachments} from './attachments.mjs';
-import {ACCESSORY_FORMAT,ORIGINAL_HEAD_ID,validMountId,fingerprint,targetSignature,mountTarget,fitTransform,validateProfile,validateAccessoryPack,resolveAccessory} from './accessory-runtime.mjs';
+import {ACCESSORY_FORMAT,ORIGINAL_HEAD_ID,validMountId,fingerprint,targetSignature,mountTarget,fitTransform,validateProfile,validateAccessoryPack,resolveAccessory,validateAnimationProfiles} from './accessory-runtime.mjs';
 export {ORIGINAL_HEAD_ID,targetSignature,mountTarget};
 const partFor=(p,t)=>p.parts[t==='head'?'head':'torso'];
 function initialId(p,target,catalog){
@@ -13,6 +13,7 @@ export function saveMountProfile(a,p){
  a.mountProfiles=(a.mountProfiles||[]).filter(f=>!(f.target===target&&f[key]===fit[key]&&f.signature===fit.signature));a.mountProfiles.push(fit);delete a.mountStatus;return a;
 }
 export function validateMountProject(p){
+ for(const a of p.attachments||[])validateAnimationProfiles(a);
  for(const key of ['headId','bodyId'])if(p[key]!==undefined&&!validMountId(p[key]))throw Error('Mã đầu / thân chỉ gồm chữ Latin, số, _ hoặc -, tối đa 120 ký tự');
  const ids=new Set();for(const a of p.attachments||[]){if(a.accessoryId!==undefined){if(!validMountId(a.accessoryId)||ids.has(a.accessoryId))throw Error('Mã phụ kiện không hợp lệ hoặc trùng');ids.add(a.accessoryId)}if(a.mountProfiles!==undefined){if(!Array.isArray(a.mountProfiles)||a.mountProfiles.length>100)throw Error('Tối đa 100 cấu hình cho một phụ kiện');const keys=new Set();for(const f of a.mountProfiles){validateProfile(f);const key=f.target+':'+(f.headId||f.bodyId)+':'+f.signature;if(keys.has(key))throw Error('Cấu hình gắn bị trùng');keys.add(key);validateAttachments([{...a,...f.transform}])}}}
  return p;
@@ -34,7 +35,7 @@ export function reconcileMounts(p,catalog){
   const target=mountTarget(a);if(!target)continue;
   if(!a.mountProfiles?.length){saveMountProfile(a,p);continue}
   if(changed[target]){try{Object.assign(a,resolveAccessory(a,p));delete a.mountStatus}catch{a.visible=false;a.mountStatus='missing-profile'}}
-  else if(a.mountStatus!=='missing-profile')saveMountProfile(a,p);
+  else if(a.mountStatus!=='missing-profile'&&!a.animationBase)saveMountProfile(a,p);
  }
  return validateMountProject(p);
 }
@@ -50,8 +51,8 @@ export async function exportAccessoryPack(p,ids,portableImage){
  if(!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length)throw Error('Chọn ít nhất một phụ kiện, không chọn trùng');
  const character={headId:p.headId,bodyId:p.bodyId,parts:structuredClone({head:p.parts.head,torso:p.parts.torso})};
  const items=ids.map(id=>{const a=p.attachments?.find(v=>v.id===id);if(!a)throw Error('Không tìm thấy phụ kiện đã chọn');if(a.mountStatus==='missing-profile'&&a.visible!==false)throw Error('Hãy lưu cấu hình cho đầu / thân hiện tại trước khi xuất '+a.name);return structuredClone(a)});
- for(const a of items){if(mountTarget(a)&&a.mountStatus!=='missing-profile')saveMountProfile(a,character);delete a.mountStatus;const sprites=a.wingRig?Object.values(a.wingRig.sprites):[a];await Promise.all(sprites.map(async s=>{s.src=await portableImage(s.src)}))}
- const pack={format:ACCESSORY_FORMAT,version:1,items};validateAccessoryPack(pack);validateAttachments(items);return pack;
+ for(const a of items){if(mountTarget(a)&&a.mountStatus!=='missing-profile'&&!a.animationBase)saveMountProfile(a,character);delete a.mountStatus;const sprites=a.wingRig?Object.values(a.wingRig.sprites):[a];await Promise.all(sprites.map(async s=>{s.src=await portableImage(s.src)}))}
+ const pack={format:ACCESSORY_FORMAT,version:items.some(a=>a.animationProfiles?.length)?2:1,runtimeVersion:2,items};validateAccessoryPack(pack);validateAttachments(items);return pack;
 }
 export function importAccessoryPack(p,pack){
  validateAccessoryPack(pack);validateAttachments(pack.items);const next=structuredClone(p);next.attachments||=[];
@@ -60,7 +61,8 @@ export function importAccessoryPack(p,pack){
   const i=next.attachments.findIndex(v=>v.accessoryId===a.accessoryId);
   if(i>=0){const old=next.attachments[i];a.id=old.id;const profiles=new Map((old.mountProfiles||[]).map(f=>[f.target+':'+(f.headId||f.bodyId)+':'+f.signature,f]));for(const f of a.mountProfiles)profiles.set(f.target+':'+(f.headId||f.bodyId)+':'+f.signature,f);a.mountProfiles=[...profiles.values()]}
   else{a.id=a.accessoryId;let seq=1;while(next.attachments.some(v=>v.id===a.id))a.id=a.accessoryId+'_'+seq++}
-  try{a=resolveAccessory(a,next)}catch{a.visible=false;a.mountStatus='missing-profile'}
+  if(i>=0){const key=f=>f.animationId+':'+(f.targetId||''),profiles=new Map((next.attachments[i].animationProfiles||[]).map(f=>[key(f),f]));for(const f of a.animationProfiles||[])profiles.set(key(f),f);if(profiles.size)a.animationProfiles=[...profiles.values()];a.animationBase||=structuredClone(next.attachments[i].animationBase)}
+  try{a=resolveAccessory(a,next,next.clip?.id)}catch{a.visible=false;a.mountStatus='missing-profile'}
   if(i>=0)next.attachments[i]=a;else next.attachments.push(a);
  }
  validateAttachments(next.attachments);validateMountProject(next);return next;

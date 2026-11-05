@@ -2,6 +2,10 @@
 
 ## Skill & VFX (runtime version 7)
 
+Gói skill xuất mới dùng **skill-runtime.mjs v2**: 15 chuyển động, nhịp easing,
+hiện/tan, màu và hiển thị riêng từng mốc. Map/bộ phát map vẫn giữ v7; cập nhật
+bộ phát skill ở game nếu dùng các trường mới. Project skill cũ vẫn mở được.
+
 **☰ → Skill & VFX** mở mục nhập skill-pack, chỉnh hướng/khoảng cách mục tiêu
 và dùng thử trên map. Link thiết kế mở Studio riêng với 433 skill gốc và 228
 mẫu VFX. Map giữ nguyên khi nhập/gỡ gói (có Hoàn tác); dữ liệu skill và ảnh đi

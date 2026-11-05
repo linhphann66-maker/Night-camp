@@ -9,6 +9,8 @@ on:
       - 'tools/build-pet-studio.mjs'
       - 'tools/build-map-studio.mjs'
       - 'tools/build-monster-studio.mjs'
+      - 'tools/build-effects-studio.mjs'
+      - 'tools/lib/native-skills-source.mjs'
       - 'tools/lib/native-monsters-source.mjs'
       - 'tools/lib/native-ground-source.mjs'
       - 'dist/studio/maps/prop-library.mjs'
@@ -32,9 +34,10 @@ jobs:
       - run: node tools/build-pet-studio.mjs
       - run: node tools/build-map-studio.mjs
       - run: node tools/build-monster-studio.mjs
+      - run: node tools/build-effects-studio.mjs
       - name: Commit updated library data
         run: |
-          git add dist/studio/catalog.json dist/studio/library-index.json dist/studio/poses.json dist/studio/accessories.json dist/studio/stock-hat-fits.mjs dist/studio/pets/catalog.json dist/studio/maps/catalog.json dist/studio/maps/monsters.json
+          git add dist/studio/catalog.json dist/studio/library-index.json dist/studio/poses.json dist/studio/accessories.json dist/studio/stock-hat-fits.mjs dist/studio/pets/catalog.json dist/studio/maps/catalog.json dist/studio/maps/monsters.json dist/studio/effects/catalog.json
           if git diff --cached --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

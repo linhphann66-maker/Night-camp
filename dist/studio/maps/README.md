@@ -1,5 +1,15 @@
 # Map Studio v1
 
+## Skill & VFX (runtime version 7)
+
+**☰ → Skill & VFX** mở mục nhập skill-pack, chỉnh hướng/khoảng cách mục tiêu
+và dùng thử trên map. Link thiết kế mở Studio riêng với 433 skill gốc và 228
+mẫu VFX. Map giữ nguyên khi nhập/gỡ gói (có Hoàn tác); dữ liệu skill và ảnh đi
+cùng nguyên map bundle. Export có thêm `skillRuntime.source`, không thay bộ
+phát map bằng bộ phát skill. Map v7 hỗ trợ các lớp dưới chân, trên nhân vật,
+sau ánh sáng; HTML offline đã gộp đủ. Đây là VFX visual, chưa chạy luật sát
+thương/tiêu hao năng lượng gốc. Xem [hướng dẫn + prompt](../effects/README.md).
+
 ## Thư viện quái gốc (runtime version 6)
 
 Vào **☰ → Điểm sinh quái** để chọn trong 432 mẫu quái Night Camp, xem ảnh

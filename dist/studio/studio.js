@@ -18,6 +18,7 @@ import {mountPetEditor} from './pet-entry.mjs';
 import {mountWingEditor} from './wing-entry.mjs';
 import {loadAttachmentSprites,attachmentImages} from './wings.mjs';
 import {mountMapEditor} from './map-entry.mjs';
+import {mountEffectsEditor} from './effects-entry.mjs';
 import {reconcileMounts,rebasePortableMounts} from './mount-profiles.mjs';
 import {mountProfileUI} from './mount-profile-ui.mjs';
 const $=id=>document.getElementById(id), NC=window.NC;
@@ -96,6 +97,7 @@ mountTimelineTools({
 });
 mountPetEditor(pausePlayback);
 mountMapEditor(pausePlayback);
+mountEffectsEditor(pausePlayback);
 mountWingEditor({pause:pausePlayback,project:()=>state.project,portable:portableProject,current:()=>accessoryUI.selected(),set:async items=>{const next=prepareEquipment(items);validate({...state.project,attachments:next});checkpoint();state.project.attachments=next;await syncRig();await accessoryUI.refresh();persist()},message:status});
 mountMobileNavigation();
 for(const [k,label] of Object.entries(channels)){const row=document.createElement('div');row.className='channel';const l=document.createElement('label');l.htmlFor='ch_'+k;l.textContent=label;const n=document.createElement('input');n.type='number';n.step=angular(k)?1:.5;n.id='ch_'+k;row.append(l,n);$('channels').append(row);n.onchange=()=>{if(!Number.isFinite(n.valueAsNumber))return;state.playing=false;state.pose[k]=n.valueAsNumber*(angular(k)?Math.PI/180:1);status('Pose chưa ghi — bấm Ghi pose để lưu vào clip')}}

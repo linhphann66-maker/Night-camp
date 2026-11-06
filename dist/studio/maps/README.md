@@ -1,9 +1,21 @@
 # Map Studio v1
 
+## Ánh sáng theo giờ & ảnh riêng (runtime version 8)
+
+Runtime hiện tại là **v8**, giữ tương thích map v1 và mọi tính năng v7.
+Nền/đường ghép hai lớp ngày–đêm thay vì tính lại texture mỗi lần đổi giờ;
+ánh sáng nội suy theo frame. Map xuất mới kèm vùng alpha cho ảnh riêng để
+không làm mờ khi nhân vật nằm trong lề trong suốt của PNG. Player cũng nhận
+đúng `actor` từ game ngoài thay vì ghi đè bằng actor thử nội bộ.
+
+**Xuất lại nguyên map và cập nhật runtime v8 ở game**. Giữ `occlusionMask`
+khi nhập asset, bỏ xóa cache/làm tròn độ sáng theo nấc trong vòng lặp giờ.
+Xem [nguyên nhân, hướng dẫn và prompt cập nhật](LIGHTING-OCCLUSION.md).
+
 ## Skill & VFX (runtime version 7)
 
 Gói skill xuất mới dùng **skill-runtime.mjs v2**: 15 chuyển động, nhịp easing,
-hiện/tan, màu và hiển thị riêng từng mốc. Map/bộ phát map vẫn giữ v7; cập nhật
+hiện/tan, màu và hiển thị riêng từng mốc. Các tính năng v7 vẫn giữ trong v8; cập nhật
 bộ phát skill ở game nếu dùng các trường mới. Project skill cũ vẫn mở được.
 
 **☰ → Skill & VFX** mở mục nhập skill-pack, chỉnh hướng/khoảng cách mục tiêu

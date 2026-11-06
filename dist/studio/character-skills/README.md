@@ -29,6 +29,22 @@ Skill cũ; hai hệ gói có định dạng và mục đích khác nhau.
 
 ## Gói game và video khác nhau
 
+### Độ lệch âm và mốc mục tiêu
+
+Ô Lệch X/Y và Góc dùng bàn phím đầy đủ để nhập dấu `-` trên iPhone; nhận cả
+`-10.5` và `-10,5`. Có nút `− / +` bên cạnh: mỗi lần dịch X/Y 0,5 đơn vị rig,
+góc 1 độ. X/Y cho phép −2000…2000, góc −3600…3600. Khi hướng phải, X âm là
+sang trái và Y âm là lên trên; khi lật nhân vật, trục X của hiệu ứng lật theo.
+Giá trị âm được giữ khi lưu, tải lại và xuất gói, không bị chặn ở 0.
+
+**Mốc thử phía trước** (`anchor: target`) hiện là vị trí giả lập cách chân
+nhân vật 85 đơn vị rig theo hướng đang nhìn. Đây KHÔNG phải mục tiêu quái hay
+người chơi: chưa có chọn đối tượng, xoay hướng theo đối tượng, đường bay hoặc
+bám mục tiêu. Runtime hiện chưa nhận tọa độ mục tiêu thật ở `cast()`; không
+được mô tả việc chọn mốc này là đã tích hợp aim. Cần bổ sung hợp đồng mục tiêu
+giữa Studio/runtime/game nếu muốn skill khóa hoặc ngắm vào đối tượng thật;
+game/server vẫn phải kiểm tra khoảng cách, đối tượng hợp lệ và sát thương.
+
 **Xuất gói ... (.json)** tạo `*.character-skill.json`:
 
 ```

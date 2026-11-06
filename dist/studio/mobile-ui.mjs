@@ -34,6 +34,7 @@ export function mountMobileNavigation(){
   {id:'maps',label:'Vẽ & tạo map',icon:'▦',action:()=>document.getElementById('mapStudioButton').click()},
   {id:'effects',label:'Skill & VFX · hiệu ứng',icon:'✧',action:()=>document.getElementById('effectsStudioButton').click()},
   {id:'character',label:'Nhân vật & ảnh bộ phận',icon:'✦',panel:character},
+  ...(document.getElementById('characterSkillPanel')?[{id:'characterSkills',label:'Skill pixel · nhân vật & vũ khí',icon:'⚔',panel:document.getElementById('characterSkillPanel')}]:[]),
   {id:'anchors',label:'Điểm neo & xương',icon:'◇',panel:anchors},
   {id:'accessories',label:'Phụ kiện & vũ khí',icon:'♧',panel:accessories},
   {id:'animation',label:'Thiết lập animation',icon:'▶',panel:animation},

@@ -191,6 +191,9 @@ function render(){
  const canvas=$('stage'),r=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
  if(canvas.width!==Math.round(r.width*dpr)||canvas.height!==Math.round(r.height*dpr)){canvas.width=Math.round(r.width*dpr);canvas.height=Math.round(r.height*dpr)}
  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,r.width,r.height);const x=r.width/2,y=r.height*.78;
+ // Additive FX must illuminate the scene in this canvas, not an invisible
+ // CSS backdrop behind a transparent drawing surface.
+ ctx.save();ctx.translate(r.width/2,r.height/2);ctx.scale(Math.max(1,r.width/2),Math.max(1,r.height/2));const backdrop=ctx.createRadialGradient(0,0,0,0,0,Math.SQRT2);backdrop.addColorStop(0,'#2a3544');backdrop.addColorStop(.75,'#161d27');ctx.fillStyle=backdrop;ctx.fillRect(-1,-1,2,2);ctx.restore();
  ctx.strokeStyle='#344253';ctx.lineWidth=1;for(let gx=x%40;gx<r.width;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,r.height);ctx.stroke()}
  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(r.width,y);ctx.stroke();
  if($('heightGuides').checked)drawHeightGuides(ctx,r.width,r.height,y,previewScale(r)*.87);

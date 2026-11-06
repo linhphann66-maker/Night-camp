@@ -3,7 +3,14 @@ import {sample,CURVES,PARTS} from './model.mjs';
 import {validAnimationId} from './animation-identity.mjs';
 import {validateAccessoryPack,resolveAccessory,mergeAccessoryProfiles} from './accessory-runtime.mjs';
 export const CHARACTER_SKILL_FORMAT='darkin-character-skill-pack-v1';
-export const CHARACTER_SKILL_RUNTIME_VERSION=1;
+export const CHARACTER_SKILL_RUNTIME_VERSION=2;
+export const CHARACTER_SKILL_LIGHT_ENCODING='max-channel-alpha-v1';
+// PixelFX light buffers store RGB energy, not opaque paint. Keep premultiplied
+// RGB energy unchanged while making faint glow faintly transparent. This is
+// also the upstream composite() convention over a transparent background.
+export function encodeCharacterSkillLight(bytes){
+ for(let i=0;i<bytes.length;i+=4){const a=Math.max(bytes[i],bytes[i+1],bytes[i+2]);for(let k=0;k<3;k++)bytes[i+k]=a?Math.round(bytes[i+k]*255/a):0;bytes[i+3]=a}return bytes;
+}
 export const CHARACTER_SKILL_RIG='nightcamp-humanoid-v1';
 export const SKILL_ANCHORS=['feet','handF','handB','weapon','head','target'];
 const finite=(v,a,b)=>Number.isFinite(v)&&v>=a&&v<=b,fail=m=>{throw Error(m)},png=s=>typeof s==='string'&&s.length<=16*1024*1024&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(s),valid=id=>validAnimationId(id),dict=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
@@ -23,13 +30,21 @@ export function validateCharacterSkillPack(p){
  let totalPixels=0,totalBytes=0;for(const e of Object.values(p.effects)){if(!e||!dict(e.sheets))fail('Atlas không hợp lệ');totalPixels+=(e.columns*e.w*Math.ceil(e.count/e.columns)*e.h)*Object.keys(e.sheets).length;totalBytes+=Object.values(e.sheets).reduce((n,s)=>n+(typeof s==='string'?s.length:0),0)}if(!Number.isFinite(totalPixels)||totalPixels>32_000_000||totalBytes>48*1024*1024)fail('Gói có quá nhiều atlas lớn; hãy tách bộ chiêu để tránh đầy bộ nhớ');
  for(const[id,c]of Object.entries(p.animations)){if(id!==c.id)fail('ID hoạt ảnh không khớp');validateCharacterAnimation(c)}
  for(const[id,e]of Object.entries(p.effects)){if(!valid(id)||!e||!['original','peripheral-only'].includes(e.variant)||typeof e.sourceId!=='string'||!/^[a-z0-9-]+\/[a-z0-9-]+$/.test(e.sourceId)||!/^[a-f0-9]{40}$/.test(e.sourceRevision)||!finite(e.duration,.01,30)||!Number.isInteger(e.w)||!finite(e.w,1,1024)||!Number.isInteger(e.h)||!finite(e.h,1,1024)||!Array.isArray(e.pivot)||e.pivot.length!==2||!e.pivot.every(v=>finite(v,-2048,2048))||!Number.isInteger(e.columns)||!finite(e.columns,1,128)||!Number.isInteger(e.count)||!finite(e.count,1,240)||e.columns*e.w>4096||Math.ceil(e.count/e.columns)*e.h>4096||e.columns*e.w*Math.ceil(e.count/e.columns)*e.h>6_000_000||!dict(e.sheets)||Object.keys(e.sheets).some(k=>!['backColor','backLight','frontColor','frontLight'].includes(k))||Object.values(e.sheets).some(s=>!png(s)))fail('Atlas PixelFX không hợp lệ')}
+ for(const e of Object.values(p.effects))if(e.lightEncoding!==undefined&&e.lightEncoding!==CHARACTER_SKILL_LIGHT_ENCODING)fail('Cách mã hóa ánh sáng skill chưa được hỗ trợ');
  for(const[id,s]of Object.entries(p.skills)){if(id!==s.id)fail('ID skill không khớp');validateCharacterSkill(s);const c=p.animations[s.animationId];if(!c||c.dur>s.duration+1e-6||s.weaponId!==null&&!weapons.has(s.weaponId)||s.tracks.some(t=>!Object.hasOwn(p.effects,t.effectId)||p.effects[t.effectId].sourceId!==t.sourceId))fail('Thiếu hoạt ảnh, vũ khí hoặc hiệu ứng được skill tham chiếu');if(s.tracks.some(t=>t.anchor==='weapon')&&s.weaponId===null)fail('Neo vũ khí cần liên kết một vũ khí')}
  if(!p.attribution||typeof p.attribution.license!=='string'||!p.attribution.license.includes('MIT License')||typeof p.attribution.notice!=='string')fail('Thiếu giấy phép PixelFX');return p;
 }
 export function createCharacterSkill(clip,weaponId=null){return {id:'skill-'+crypto.randomUUID(),name:'Quét kiếm mới',weaponId,animationId:clip.id,duration:clip.dur,hitAt:clip.hit,tracks:[]}}
 export function newCharacterSkillTrack(entry,at=0){return {id:'track-'+crypto.randomUUID(),sourceId:entry.sourceId,at,duration:entry.duration,anchor:'feet',x:0,y:0,scale:2.5,rotation:0,opacity:1,plane:'both',visible:true,seed:2,palette:[]}}
 export function atlasFrame(e,age,duration){return Math.max(0,Math.min(e.count-1,Math.floor(age/duration*e.count)))}
-export async function loadCharacterSkillImages(pack){validateCharacterSkillPack(pack);const images=new Map();await Promise.all([...new Set(Object.values(pack.effects).flatMap(e=>Object.values(e.sheets)))].map(src=>new Promise((ok,no)=>{const im=new Image();im.onload=()=>{if(im.naturalWidth*im.naturalHeight>6_000_000)return no(Error('Atlas quá lớn'));images.set(src,im);ok()};im.onerror=()=>no(Error('Không đọc được ảnh skill'));im.src=src})));for(const e of Object.values(pack.effects))for(const src of Object.values(e.sheets)){const im=images.get(src);if(im.naturalWidth!==e.columns*e.w||im.naturalHeight!==Math.ceil(e.count/e.columns)*e.h)fail('Kích thước ảnh atlas không khớp metadata')}return images}
+export async function loadCharacterSkillImages(pack){
+ validateCharacterSkillPack(pack);const images=new Map(),legacyLight=new Set(),keepOriginal=new Set();
+ await Promise.all([...new Set(Object.values(pack.effects).flatMap(e=>Object.values(e.sheets)))].map(src=>new Promise((ok,no)=>{const im=new Image();im.onload=()=>{if(im.naturalWidth*im.naturalHeight>6_000_000)return no(Error('Atlas quá lớn'));images.set(src,im);ok()};im.onerror=()=>no(Error('Không đọc được ảnh skill'));im.src=src})));
+ for(const e of Object.values(pack.effects))for(const [key,src]of Object.entries(e.sheets)){const im=images.get(src);if(im.naturalWidth!==e.columns*e.w||im.naturalHeight!==Math.ceil(e.count/e.columns)*e.h)fail('Kích thước ảnh atlas không khớp metadata');(key.endsWith('Light')&&!e.lightEncoding?legacyLight:keepOriginal).add(src)}
+ // Repair v1 exports at load time, once per atlas, never in the render loop.
+ // Separate keys keep a shared PNG usable as color as well as legacy light.
+ for(const src of legacyLight){const im=images.get(src),cv=Object.assign(document.createElement('canvas'),{width:im.naturalWidth,height:im.naturalHeight}),ctx=cv.getContext('2d');ctx.drawImage(im,0,0);const data=ctx.getImageData(0,0,cv.width,cv.height);encodeCharacterSkillLight(data.data);ctx.putImageData(data,0,0);images.set('light:'+src,cv);if(!keepOriginal.has(src))images.delete(src)}return images;
+}
 export function mergeCharacterSkillPacks(current,incoming){validateCharacterSkillPack(current);validateCharacterSkillPack(incoming);const p=structuredClone(current);for(const key of ['skills','animations','effects'])Object.assign(p[key],structuredClone(incoming[key]));if(incoming.weapons){const items=new Map((p.weapons?.items||[]).map(a=>[a.accessoryId,a]));for(const a of incoming.weapons.items)items.set(a.accessoryId,mergeAccessoryProfiles(items.get(a.accessoryId),a));p.weapons={format:'darkin-accessory-pack-v1',version:2,items:[...items.values()]}}return validateCharacterSkillPack(p)}
 // Both Studio and games use this exact placement math (world/rig units).
 export function characterSkillAnchor({equip,pose,character,weaponId,x,y,scale},anchor){
@@ -38,7 +53,7 @@ export function characterSkillAnchor({equip,pose,character,weaponId,x,y,scale},a
  const raw=NC.ITEMS[equip.top]?.attachments?.find(a=>a.visible!==false&&(a.accessoryId||a.id)===weaponId);if(!raw)return null;const a=pose.animationEditing?raw:resolveAccessory(raw,character,pose.animationId),m=NC.attachmentMatrix(equip,pose,a,x,y,scale);return [m.e,m.f];
 }
 export function drawCharacterSkillTrack(ctx,t,e,age,images,placement,plane,{pixelated=true}={}){
- if(t.visible===false||age<0||age>=t.duration||t.plane!=='both'&&t.plane!==plane)return;const anchor=characterSkillAnchor(placement,t.anchor);if(!anchor)return;const frame=atlasFrame(e,age,t.duration),sx=frame%e.columns*e.w,sy=Math.floor(frame/e.columns)*e.h;ctx.save();try{ctx.translate(...anchor);ctx.scale((placement.pose.face||1)*placement.scale,placement.scale);ctx.translate(t.x,t.y);ctx.rotate(t.rotation*Math.PI/180);ctx.scale(t.scale,t.scale);ctx.globalAlpha*=t.opacity;ctx.imageSmoothingEnabled=!pixelated;for(const suffix of ['Color','Light']){const src=e.sheets[plane+suffix],img=images.get(src);if(!img)continue;ctx.globalCompositeOperation=suffix==='Light'?'lighter':'source-over';ctx.drawImage(img,sx,sy,e.w,e.h,-e.pivot[0],-e.pivot[1],e.w,e.h)}}finally{ctx.restore()}
+ if(t.visible===false||age<0||age>=t.duration||t.plane!=='both'&&t.plane!==plane)return;const anchor=characterSkillAnchor(placement,t.anchor);if(!anchor)return;const frame=atlasFrame(e,age,t.duration),sx=frame%e.columns*e.w,sy=Math.floor(frame/e.columns)*e.h;ctx.save();try{ctx.translate(...anchor);ctx.scale((placement.pose.face||1)*placement.scale,placement.scale);ctx.translate(t.x,t.y);ctx.rotate(t.rotation*Math.PI/180);ctx.scale(t.scale,t.scale);ctx.globalAlpha*=t.opacity;ctx.imageSmoothingEnabled=!pixelated;for(const suffix of ['Color','Light']){const src=e.sheets[plane+suffix],img=(suffix==='Light'&&!e.lightEncoding?images.get('light:'+src):null)||images.get(src);if(!img)continue;ctx.globalCompositeOperation=suffix==='Light'?'lighter':'source-over';ctx.drawImage(img,sx,sy,e.w,e.h,-e.pivot[0],-e.pivot[1],e.w,e.h)}}finally{ctx.restore()}
 }
 export function equippedCharacterWeapon(player){return player.spec.attachments?.find(a=>a.visible!==false&&(a.category==='weapon'||['handF','handB'].includes(a.animationBase?.socket||a.socket)))?.accessoryId||player.spec.weapon?.id||null}
 export class CharacterSkillController{

@@ -72,6 +72,21 @@ animation nhân vật trong Studio. Atlas xuất chỉ lấy hiệu ứng, khôn
 
 ## Tích hợp vào game mới
 
+### Sửa nền đen ánh sáng (runtime nhân vật v2)
+
+Atlas ánh sáng mới có `lightEncoding: max-channel-alpha-v1`: alpha bằng kênh
+RGB sáng nhất và RGB đã bỏ premultiply, giữ đúng năng lượng cộng sáng khi vẽ
+bằng `lighter`. Không xóa màu đen theo ngưỡng: khói, bóng tối, nét viền và màu
+tối có chủ ý trong lớp Color vẫn giữ nguyên. Preview Studio vẽ nền vào canvas
+trước nhân vật/FX, giống cách game vẽ map rồi cộng ánh sáng; không cộng sáng
+trực tiếp lên canvas rỗng với nền chỉ đặt bằng CSS.
+
+Nếu đã tích hợp bản cũ: thay bộ runtime từ ZIP mới. Runtime v2 tự chuyển đổi
+atlas Light cũ chưa có `lightEncoding` một lần khi nạp, không xử lý lại mỗi
+khung hình và không đổi skillId/animationId/weaponId. Có thể dùng lại JSON cũ;
+xuất lại từ thiết kế đã lưu sẽ tạo atlas trong suốt mới. Gói mới cần runtime
+v2 để nhận biết cách mã hóa. Video cũ không tự thay đổi; cần xuất video lại.
+
 Đây là **runtime nhân vật**, không phải map-runtime v8 và không thay bộ phát
 skill-pack cũ. Cài toàn bộ runtime từ ZIP mới một lần. Có `player.mjs`,
 `character-skill-runtime.mjs` và các module phụ thuộc cùng renderer/avatar.js.

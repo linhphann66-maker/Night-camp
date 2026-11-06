@@ -198,7 +198,7 @@ function render(){
  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(r.width,y);ctx.stroke();
  if($('heightGuides').checked)drawHeightGuides(ctx,r.width,r.height,y,previewScale(r)*.87);
  if(!state.rig||drawError)return;
- try{const P={...state.pose,face:state.face,attachmentTime:state.attachmentTime,animationId:state.project.clip.id,animationEditing:true},scale=previewScale(r),placement={equip:state.equip,character:state.project,pose:P,x,y,scale};characterSkills?.draw(ctx,placement,'back');NC.drawRig(ctx,state.rig,state.equip,P,x,y,{scale,noWeapon:true});characterSkills?.draw(ctx,placement,'front');jointPositions=NC.rigJoints(state.equip,P,x,y,scale);
+ try{const P={...state.pose,face:state.face,attachmentTime:state.attachmentTime,animationId:state.project.clip.id,animationEditing:true},scale=previewScale(r),placement={rig:state.rig,equip:state.equip,character:state.project,pose:P,x,y,scale};characterSkills?.draw(ctx,placement,'back');NC.drawRig(ctx,state.rig,state.equip,P,x,y,{scale,noWeapon:true});characterSkills?.draw(ctx,placement,'body');characterSkills?.draw(ctx,placement,'front');jointPositions=NC.rigJoints(state.equip,P,x,y,scale);
   if($('bones').checked){ctx.strokeStyle='#d3ed9299';ctx.lineWidth=1.5;for(const chain of chains){ctx.beginPath();chain.forEach((key,i)=>ctx[i?'lineTo':'moveTo'](...jointPositions[key]));ctx.stroke()}
    for(const [name,p] of Object.entries(jointPositions)){if(name==='wHand'||name==='wTip')continue;ctx.fillStyle='#d3ed92';ctx.beginPath();ctx.arc(...p,3.5,0,7);ctx.fill()}
   }drawAnchor();

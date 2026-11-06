@@ -49,6 +49,7 @@ function edgeOf(A) {
   const m = A.mask, on = (x, y) => x >= 0 && y >= 0 && x < m.w && y < m.h && m.data[y * m.w + x];
   e = [];
   for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) if (on(x, y) && (!on(x - 1, y) || !on(x + 1, y) || !on(x, y - 1) || !on(x, y + 1))) e.push([A.x + x + 0.5, A.y + y + 0.5]);
+  if (!e.length) e.push([A.x,A.y+A.h*.4],[A.x+A.w,A.y+A.h*.4],[A.x+A.w*.2,-2],[A.x+A.w*.8,-2]);
   edges.set(A.mask, e);
   return e;
 }

@@ -77,14 +77,41 @@ Kho được ghim commit `a84159688af3ca37a4be05a0d422b94451b2e24e` của
 [patch-gg/pixelfx](https://github.com/patch-gg/pixelfx). Không dùng font riêng ở
 gallery/fonts. Giữ LICENSE/NOTICE cho Patch, Hugo Duprez và phần mã liên quan.
 
-37 preset gốc tô lại/biến đổi dáng nhân vật mẫu (ví dụ đóng băng, hồi sinh, một
-số trạng thái). Studio đánh dấu và dùng biến thể **peripheral-only**: giữ phần
-hiệu ứng bên ngoài, bỏ pixel vẽ lại thân mẫu; KHÔNG giả vờ đã retarget trọn lớp
-đổi màu cơ thể lên trang phục bất kỳ. Muốn đóng băng/đổi màu đúng toàn bộ thân
-của mỗi người chơi cần shader/mask theo nhân vật thực trong game. Vệt chém,
-đạn, hạt, vòng phép thông thường không có hạn chế này. Hoạt ảnh diễn xuất của
-dummy trên trang nguồn cũng không tự chuyển thành bộ xương Cutout: hãy chọn
-animation nhân vật trong Studio. Atlas xuất chỉ lấy hiệu ứng, không vẽ dummy.
+37 preset gốc tô lại/biến đổi dáng nhân vật mẫu. Từ bản tách lớp mới, Studio
+cấp cho chúng một actor tham chiếu KHÔNG có pixel/mặt nạ thân mẫu; vẫn giữ
+vị trí đầu/ngực và kích thước để định vị hiệu ứng. Không xóa pixel theo một
+lỗ hình người sau khi vẽ. Cột sáng, mặt cầu và hạt đi qua vùng đó vẫn liên tục;
+thân và viền của dummy không được vẽ ngay từ đầu. Một số bộ phát hạt cần điểm
+trên thân có guard rỗng/điểm phát thay thế, được ghi trong tools/pixelfx-external-compat.mjs.
+Nguồn MIT vẫn giữ nguyên attribution; `sourceRevision` là commit upstream,
+`bodySeparation: external-actor-v1` nhận diện cách thích ứng riêng của Studio.
+
+### Ba lớp trước / thân thật / sau (runtime v3)
+
+Thứ tự: **FX sau → nhân vật → lớp phủ thân thật tùy chọn → FX trước**.
+Giữ **Cả trước & sau nhân vật** để khiên bao quanh người; hạt và mặt cầu phía
+trước KHÔNG bị mặt nạ thân che. Bộ lọc Lớp nguồn chỉ chọn các lớp gốc, không
+chuyển tất cả hiệu ứng ra sau. Không dùng một mặt nạ che chung cho mọi skill.
+
+Trong từng mốc, **Lớp trên thân nhân vật thật** có Tắt / Tô màu / Tô sáng /
+Viền sáng, màu và độ rõ riêng. Mặt nạ được vẽ theo đầu, trang phục, pose và
+hướng của nhân vật ĐANG CHƠI mỗi frame; không lấy thân mẫu và không bake ảnh
+nhân vật thử vào gói. Không tô vũ khí, mũ hay cánh. Lớp này theo thân thật,
+không theo X/Y/scale/rotation của VFX; thời gian và độ rõ chung của mốc vẫn áp dụng.
+Mặc định Tắt để không tự đổi ngoại hình. Đây là lớp tint/glow/outline tự chọn,
+không phải tự retarget đầy đủ mọi chi tiết nứt băng, tan thân, tách mảnh và
+biến hình của upstream; những hiệu ứng đó cần xử lý gameplay/shader riêng.
+
+Gói mới có `minRuntimeVersion: 3`. Cập nhật TOÀN BỘ runtime trong ZIP mới,
+gồm character-skill-body.mjs và renderer/avatar.js (có chế độ mask không phụ
+kiện). Nếu game gọi `drawEffects` thủ công, gọi thêm lớp `body` giữa vẽ nhân
+vật và lớp `front`; dùng `controller.draw()` thì đã có sẵn.
+
+Các JSON cũ vẫn đọc được, nhưng runtime không thể phục hồi ánh sáng đã bị
+khoét mất trong atlas cũ. Mở project hoặc nhập JSON cũ vào Studio rồi xuất
+lại để tạo atlas mới; cache cũ bị loại theo bodySeparation, giữ nguyên các ID.
+Video cũ cần xuất lại. Hoạt ảnh diễn xuất của dummy không tự chuyển thành
+bộ xương Cutout: chọn animation nhân vật trong Studio như trước.
 
 ## Tích hợp vào game mới
 

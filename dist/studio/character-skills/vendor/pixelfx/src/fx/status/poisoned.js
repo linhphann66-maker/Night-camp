@@ -33,6 +33,7 @@ function body(a, seed) {
   if (!m) BODIES.set(a.mask, (m = new Map()));
   if (m.has(seed)) return m.get(seed);
   const S = shape(a), H = S.h, W = S.w, R = new Rng(seed * 7 + 3);
+  if (!S.body.length) return {veins: [], wound: [W/2,H*.6], blisters: [[],[]], sweat: [[W*.3,H*.2],[W*.7,H*.2]]};
   const [l, r] = S.rows[Math.round(H * 0.6)], wx = r - 1, wy = Math.round(H * 0.6);
   const veins = [];
   const walk = (x, y, ang, len, depth) => {

@@ -44,6 +44,7 @@ function spots(a, seed) {
   if (!s) SPOTS.set(a.mask, (s = new Map()));
   if (s.has(seed)) return s.get(seed);
   const S = shape(a), H = S.h, W = S.w, R = new Rng(seed * 13 + 5);
+  if (!S.body.length) return {list: [[.3,.12],[.75,.5],[.25,.62],[.75,.65]].map(([x,y],i)=>({x:a.x+W*x,y:a.y+H*y,tongues:[{dx:0,h:4.5,n:i*17+seed}]})),scorch:[[],[]]};
   const at = (q, side) => {
     const my = Math.round(H * q), [l, r] = S.rows[my];
     return [side < 0 ? l : r, my];

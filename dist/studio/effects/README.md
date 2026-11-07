@@ -1,5 +1,14 @@
 # Skill & VFX Studio
 
+## Chỉnh cùng nhân vật, hoạt ảnh và vũ khí
+
+Trong Studio chính, **Skill & VFX · nhân vật & vũ khí** nay dùng chung stage
+nhân vật thật với PixelFX. Có kho VFX gốc, tải/tách ảnh, thư viện ảnh đã lưu,
+nhập thiết kế VFX cũ và xuất gói skill nhân vật kèm hoạt ảnh/ID vũ khí/video.
+Xem [hướng dẫn workflow nhân vật](../character-skills/README.md).
+Trang VFX độc lập này vẫn giữ để sửa thiết kế cũ và dùng cho Map Studio;
+project/gói cũ không bị xóa hay tự đổi định dạng. Không khôi phục aim/multi-hit.
+
 ## Tải sprite sheet, tự tách frame và thư viện ảnh riêng
 
 Trong **Thư viện VFX → Tải ảnh / sprite sheet VFX · tự tách**, Studio mở bảng

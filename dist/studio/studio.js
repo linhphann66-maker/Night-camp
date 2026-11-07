@@ -18,7 +18,6 @@ import {mountPetEditor} from './pet-entry.mjs';
 import {mountWingEditor} from './wing-entry.mjs';
 import {loadAttachmentSprites,attachmentImages} from './wings.mjs';
 import {mountMapEditor} from './map-entry.mjs';
-import {mountEffectsEditor} from './effects-entry.mjs';
 import {reconcileMounts,rebasePortableMounts} from './mount-profiles.mjs';
 import {mountProfileUI} from './mount-profile-ui.mjs';
 import {ensureAnimationId,builtinAnimationId,animationPack,readAnimationPack} from './animation-identity.mjs';
@@ -104,14 +103,16 @@ mountTimelineTools({
   const result=copyPoseToFrames(state.project.clip,captured.index,targets,captured.pose);checkpoint();state.project.clip=result.clip;selectKey(captured.index);renderMeta();persist();status('Đã sao chép tư thế frame '+(captured.index+1)+' sang '+result.count+' frame; giữ nguyên thời điểm và đường cong.');
  },
 });
-characterSkills=mountCharacterSkills({project:()=>state.project,time:()=>state.time,portable:portableProject,portableImage,download,message:status,record:recordSkillPreview,persist,pause:pausePlayback,seek:t=>{state.time=t;setPose();renderKeys()},placement:()=>{const r=$('stage').getBoundingClientRect();return {equip:state.equip,character:state.project,pose:{...state.pose,face:state.face,attachmentTime:state.attachmentTime,animationId:state.project.clip.id,animationEditing:true},x:r.width/2,y:r.height*.78,scale:previewScale(r)}},setProject:async(p,{rig=false}={})=>{validate(p);if(p.characterSkills)validateCharacterSkillDraft(p.characterSkills);checkpoint();state.project=p;if(rig){switchAnimationMounts(p);await syncRig();setPose();renderMeta()}persist()},openProject:async p=>{checkpoint();characterSkills.stopPreview();await adopt(p)},loadClip:async c=>{const p=structuredClone(state.project);p.clip=structuredClone(c);checkpoint();await adopt(p)},equip:async id=>{await accessoryUI.activate(id)}});
+characterSkills=mountCharacterSkills({project:()=>state.project,time:()=>state.time,portable:portableProject,portableImage,image,assetURL:src=>source?.assetURL(src)||'',download,message:status,record:recordSkillPreview,persist,pause:pausePlayback,seek:t=>{state.time=t;setPose();renderKeys()},placement:()=>{const r=$('stage').getBoundingClientRect();return {equip:state.equip,character:state.project,pose:{...state.pose,face:state.face,attachmentTime:state.attachmentTime,animationId:state.project.clip.id,animationEditing:true},x:r.width/2,y:r.height*.78,scale:previewScale(r)}},setProject:async(p,{rig=false}={})=>{validate(p);if(p.characterSkills)validateCharacterSkillDraft(p.characterSkills);checkpoint();state.project=p;if(rig){switchAnimationMounts(p);await syncRig();setPose();renderMeta()}persist()},openProject:async p=>{checkpoint();characterSkills.stopPreview();await adopt(p)},loadClip:async c=>{const p=structuredClone(state.project);p.clip=structuredClone(c);checkpoint();await adopt(p)},equip:async id=>{await accessoryUI.activate(id)}});
 const pauseForModal=()=>{characterSkills.stopPreview();pausePlayback()};
 $('stage').addEventListener('pointerdown',()=>characterSkills.pausePreview(),{capture:true});
 mountPetEditor(pauseForModal);
 mountMapEditor(pauseForModal);
-mountEffectsEditor(pauseForModal);
+// The main Skill & VFX workflow now uses the actual character stage.
+const characterNavigation=()=>{pauseForModal();mobileNavigation.select('characterSkills');characterSkills.panel.scrollIntoView({block:'start'})};
+const effectsShortcut=document.createElement('button');effectsShortcut.id='effectsStudioButton';effectsShortcut.textContent='✧ Skill & VFX · nhân vật';effectsShortcut.onclick=characterNavigation;document.querySelector('header nav').prepend(effectsShortcut);
 mountWingEditor({pause:pauseForModal,project:()=>state.project,portable:portableProject,current:()=>accessoryUI.selected(),set:async items=>{const next=prepareEquipment(items);validate({...state.project,attachments:next});checkpoint();state.project.attachments=next;await syncRig();await accessoryUI.refresh();persist()},message:status});
-mountMobileNavigation();
+const mobileNavigation=mountMobileNavigation();
 for(const [k,label] of Object.entries(channels)){const row=document.createElement('div');row.className='channel';const l=document.createElement('label');l.htmlFor='ch_'+k;l.textContent=label;const n=document.createElement('input');n.type='number';n.step=angular(k)?1:.5;n.id='ch_'+k;row.append(l,n);$('channels').append(row);n.onchange=()=>{if(!Number.isFinite(n.valueAsNumber))return;state.playing=false;state.pose[k]=n.valueAsNumber*(angular(k)?Math.PI/180:1);status('Pose chưa ghi — bấm Ghi pose để lưu vào clip')}}
 options($('part'),PARTS.map(p=>[p,labels[p]]));
 options($('anchorPart'),PARTS.map(p=>[p,labels[p]]));

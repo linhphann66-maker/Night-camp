@@ -14,12 +14,9 @@ Xem [nguyên nhân, hướng dẫn và prompt cập nhật](LIGHTING-OCCLUSION.m
 
 ## Skill & VFX (runtime version 7)
 
-Gói skill xuất mới dùng **skill-runtime.mjs v3**: điểm ngắm tùy chỉnh trên
-VFX, chốt/bám mục tiêu và nhiều mốc trúng theo giây/frame, mỗi mốc có điểm,
-sát thương và phạm vi riêng. Giữ 15 chuyển động, easing, hiện/tan và chỉnh
-riêng từng mốc từ v2. Map vẫn dùng runtime v8; cập nhật bộ phát skill ở game
-nếu dùng trường mới. Project skill cũ vẫn mở được. Các mốc là cấu hình bàn
-giao, không tự gây sát thương: server game phải nạp và xác thực luật chiến đấu.
+Gói skill xuất mới dùng **skill-runtime.mjs v2**: 15 chuyển động, nhịp easing,
+hiện/tan, màu và hiển thị riêng từng mốc. Các tính năng v7 vẫn giữ trong v8; cập nhật
+bộ phát skill ở game nếu dùng các trường mới. Project skill cũ vẫn mở được.
 
 **☰ → Skill & VFX** mở mục nhập skill-pack, chỉnh hướng/khoảng cách mục tiêu
 và dùng thử trên map. Link thiết kế mở Studio riêng với 433 skill gốc và 228

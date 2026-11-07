@@ -1,95 +1,5 @@
 # Skill & VFX Studio
 
-## Điểm ngắm mục tiêu và nhiều lần trúng · skill-runtime v3
-
-Trong **Mốc hiệu ứng / timeline**, chọn VFX, chọn frame rồi bấm **Chạm lên
-VFX để đặt điểm ngắm**. Chạm tâm vòng phép hoặc đầu trượng/kiếm cần tiếp đất.
-Studio lưu điểm trong hệ tọa độ cục bộ VFX (tỷ lệ 1, gốc theo anchor ảnh),
-không lưu tọa độ màn hình. Phép ngắm vẫn đúng khi zoom, xoay hay đổi tỷ lệ.
-Khi đặt điểm bằng chạm, neo đổi sang mục tiêu, lệch X/Y được đưa về 0.
-Game truyền **tọa độ chân** mục tiêu để tâm vòng phép nằm dưới chân, không
-truyền góc trên trái sprite. Ô X/Y có thể nhập số âm, dấu phẩy hoặc dấu chấm.
-
-- **Một điểm cố định**: giữ điểm đó và chuyển động dịch chuyển gốc. Với
-  chuyển động tại chỗ và lệch X/Y = 0, điểm đó luôn khớp mục tiêu.
-- **Theo điểm của từng lần trúng**: dùng điểm của các hit đã gắn VFX và bật
-  Bám điểm trúng làm các khóa nội suy. VFX dịch mượt giữa các điểm để mỗi
-  điểm tiếp xúc khớp mục tiêu vào đúng mốc. Chế độ này **thay chuyển động
-  dịch chuyển** (đường bay/rơi/rung), nhưng giữ chuỗi frame, tỷ lệ và góc.
-  Không tự vẽ lại frame hay tách nhiều thanh kiếm thành đối tượng riêng.
-- **Chốt vị trí** dùng vị trí lúc cast. **Bám vị trí** dùng object tọa độ
-  `targetRef` mà game cập nhật theo quái/người chơi đang được khóa. Studio
-  không tự tìm entity theo ID hay quyết định ai là địch. Game phải truyền
-  đúng `targetId` và vị trí hợp lệ, xử lý mất mục tiêu/chết/đổi map ở adapter.
-
-Bấm **Các lần trúng / thêm sát thương** hoặc chọn panel **Ngắm mục tiêu &
-các lần trúng**. Mặc định có một mốc tương thích `hitAt` cũ. Chỉnh mốc này
-hoặc bấm **Thêm lần trúng** sẽ tạo `skills[id].hits[]`; từ đó danh sách thay
-thế hoàn toàn `hitAt`, không phát thêm sát thương đơn cũ. Xóa hết là không
-có hit. Tối đa 128 mốc/skill; mỗi mốc có ID riêng, giữ qua lưu/mở lại/xuất.
-
-Ví dụ bốn kiếm rơi: gắn cùng VFX, tạo bốn mốc, chọn frame từng kiếm chạm đất,
-chạm điểm tiếp xúc riêng, đặt sát thương và phạm vi riêng. Chọn **Theo điểm
-của từng lần trúng** nếu muốn lần lượt đưa mỗi điểm đó trùng chân mục tiêu.
-Hai hit cùng lúc không thể ngắm hai điểm khác nhau của cùng một VFX: tắt
-`alignTarget` ở một mốc hoặc tách thành hai VFX. Nếu muốn nhiều điểm rơi
-quanh mục tiêu giữ nguyên bố cục, dùng điểm ngắm cố định và phạm vi vùng.
-
-- Thời điểm theo **giây** là trên toàn timeline skill; tự tăng độ dài skill
-  để chứa mốc (giới hạn 30 giây).
-- Thời điểm theo **frame** là frame của **ảnh VFX**, không phải frame clip
-  nhân vật. UI đếm từ 1, JSON `frame` đếm từ 0. Thời điểm thực là
-  `event.at + tổng thời gian frame trước / tổng thời gian VFX * event.duration`.
-  Vì vậy đổi tốc độ VFX vẫn giữ đúng frame tiếp xúc. Với tiếp xúc theo clip
-  nhân vật, đồng bộ alias `animation` ở game rồi đặt giây trên timeline.
-- Điểm trúng của mốc có VFX là tọa độ cục bộ của VFX; không gắn VFX thì là
-  độ lệch từ mục tiêu. Bán kính vùng là **đơn vị map**, không nhân tỷ lệ ảnh.
-- Sát thương: **Theo luật game** (chưa đặt số), **Số cố định**, hoặc **Hệ số
-  công** (vd 1,5 × ATK). Đây là cấu hình bàn giao, không tự thay đổi HP.
-- Bấm **Đến thời điểm trúng** để xem frame tiếp xúc; **Dùng thử** có nhật ký
-  marker. Các mốc độc lập, có Nhân bản/Xóa/Hoàn tác, lưu nháp/thư viện và gói.
-
-Ví dụ cấu trúc mới (các trường skill/event hiện có vẫn giữ nguyên):
-
-```js
-event.aim = {x: 0, y: 42, mode: 'hits'};
-event.anchor = 'target'; event.x = 0; event.y = 0;
-event.targetMode = 'snapshot';
-skill.hits = [{
-  id: 'sword_1', name: 'Kiếm 1', eventId: event.id,
-  mode: 'frame', frame: 4, at: 0, point: {x: 0, y: 42},
-  damage: {mode: 'flat', value: 25}, scope: 'area', radius: 48,
-  enabled: true, alignTarget: true
-}];
-// at chỉ dùng khi mode=time; frame chỉ dùng khi mode=frame.
-```
-
-Gói mới có `project.minRuntimeVersion: 3`; cần cập nhật **skill-runtime.mjs
-v3** một lần ở game, rồi nhập JSON mới. Đây là bộ phát của Skill & VFX Studio,
-**không phải character-skill-runtime.mjs** của PixelFX nhân vật. Runtime v3
-đọc gói cũ v1/v2; format project/pack vẫn v1. Dùng bản runtime đã review ở game,
-không thực thi `runtime.source` từ file do người chơi tùy ý tải lên.
-
-`SkillPlayer.cast` nhận `{caster, target, targetId}`. `targetId` là chuỗi hoặc
-null; tọa độ object `target` phải được game cập nhật tại chỗ nếu dùng follow.
-`onEvent` phát `hit-marker` với `hitId`, `eventId`, `at`, `damage`, `scope`,
-`radius`, `x/y`, `target`, `targetId`, `instanceId`, `authoritative: false`.
-Mỗi ID chỉ phát **một lần mỗi lượt cast**, kể cả khi một tick đi qua nhiều mốc;
-hit tại 0 giây phát ngay khi cast. Không gắn handler gây damage ở cả `hitAt`
-và `hits[]`. Các API thuần `skillHits`, `skillHitTime`, `skillHitGeometry`
-dùng được trên Node để đọc **bundle đã được server duyệt/cài đặt**.
-Nếu tự gọi `drawSkillEvent`/các hàm transform thay vì SkillPlayer, truyền
-`instance.project` và `instance.skill` cho aim theo nhiều hit; SkillPlayer đã
-truyền sẵn. Luôn cập nhật runtime ở cả các đường preview/offline/game.
-
-**Tích hợp chiến đấu:** server nạp cấu hình tin cậy, lên lịch từng `hitId` theo
-thời gian cast và xác thực quyền dùng skill/vũ khí, mana, cooldown, khoảng cách,
-phe, trạng thái, hình học va chạm và mục tiêu. Tính damage/crit/kháng/HP/loot ở
-server rồi đồng bộ kết quả. Không tin con số, tọa độ hay marker từ client.
-Với follow, server lấy vị trí mục tiêu theo thời gian mô phỏng; marker phía
-client khi rớt frame chỉ dùng vị trí hiện tại, không tái dựng quá khứ. Hủy cast
-và xử lý chết/mất mục tiêu ở game. Runtime Studio không tự tạo luật MMO đó.
-
 ## Tải sprite sheet, tự tách frame và thư viện ảnh riêng
 
 Trong **Thư viện VFX → Tải ảnh / sprite sheet VFX · tự tách**, Studio mở bảng
@@ -157,9 +67,8 @@ bay đi–về. Ô biên độ/nhịp/vòng/đích chỉ bật khi có tác dụ
 Có nhịp đều/nhanh dần/chậm dần/êm đầu cuối và thời gian hiện/tan theo từng mốc.
 
 Project v1 cũ vẫn mở nguyên dạng, không đổi ID/ảnh hay tự sắp xếp lại mốc.
-Các trường chuyển động là tùy chọn, được thêm từ **skill-runtime.mjs v2**.
-Gói xuất hiện tại dùng **v3**, map bundle có `skillRuntime.version: 3`;
-bộ phát map vẫn v8. Cập nhật bộ phát skill
+Các trường mới là tùy chọn; gói xuất mới dùng **skill-runtime.mjs v2**. Map
+bundle có `skillRuntime.version: 2`, bộ phát map vẫn v7. Cập nhật bộ phát skill
 ở game để dùng chuyển động mới. Giá trị từng bị từ chối trong bản cũ chưa được
 lưu: người dùng cần nhập lại lần đó; Studio không tự đoán mốc đã mất.
 
@@ -192,8 +101,7 @@ rồi tuyên bố đó là hoạt ảnh gốc. SP, hệ số, hồi chiêu và m
 chụp từ hàm dữ liệu nguồn; không serialize/chạy các hàm chiến đấu vào file game.
 
 `animation` là tên clip nhân vật mà game phải ánh xạ (vd attack hoặc bow_shoot).
-`hitAt` là thời điểm gửi tín hiệu hình ảnh cho gói chưa có `hits[]`; không tự
-tạo hitbox hoặc gây sát thương. `hits[]` mới thay mốc đơn như phần trên.
+`hitAt` là thời điểm gửi tín hiệu hình ảnh; không tự tạo hitbox hoặc gây sát thương.
 Mốc VFX phải nằm hết trong thời lượng skill, có kiểm tra thay đổi và Hoàn tác/Làm lại.
 
 ## Xuất và tích hợp
@@ -205,7 +113,7 @@ Mốc VFX phải nằm hết trong thời lượng skill, có kiểm tra thay đ
   Không đổi ID/format chỉ vì đổi tên file. Nháp trình duyệt đầy thì lưu ra file.
 - Map Studio → **Skill & VFX** → Nhập gói. Dùng thử skill trên map hoặc Chạy
   thử rồi phát từ người di chuyển. Map lưu `project.skillPack`, export có
-  `skillRuntime.source` bên cạnh map `runtime.source`. Map-runtime v8 hỗ trợ
+  `skillRuntime.source` bên cạnh map `runtime.source`. Map-runtime v7 hỗ trợ
   ba hook lớp. HTML chạy thử độc lập đã gộp hai bộ phát và ảnh, không cần GitHub.
 
 ```js
@@ -216,10 +124,7 @@ const fx = new SkillPlayer(data, {onEvent(event) {
   if (event.type === 'cast') character.play(event.animation); // adapter game
   // hit-marker chỉ đồng bộ hình ảnh, không phải chứng cứ hit từ server
 }});
-fx.cast('fireball', {
-  caster: character.position, target: selectedTarget.position,
-  targetId: String(selectedTarget.id)
-}); // position là object tọa độ chân, được game cập nhật tại chỗ
+fx.cast('fireball', {caster: character.position, target: selectedTarget.position});
 // update mỗi tick
 fx.update(dt);
 map.draw(ctx, width, height, {
@@ -241,17 +146,10 @@ theo skills[id], VFX theo effects[id]; kiểm tra xung đột ID, không ghi đ�
 riêng âm thầm. Nạp ảnh nhúng, giữ w/h/ax/ay và thời gian frame, áp timeline với
 at/duration/anchor/follow/scale/rotation/opacity/blend/motion và low/high/glow.
 Dùng skill-runtime.mjs SkillPlayer, loadSkillImages, update và draw từng lớp;
-map-runtime.mjs v8 có beforeEntities/afterEntities/afterLighting. Dùng
-skill-runtime.mjs v3, đọc aim/targetMode và hits[]. Fixed giữ chuyển động gốc;
-aim.mode=hits khóa điểm tiếp xúc theo từng hit và thay dịch chuyển gốc. Truyền
-targetId cùng object tọa độ chân; follow cần cập nhật object đó tại chỗ. Cast event gọi
+map-runtime.mjs v7 có beforeEntities/afterEntities/afterLighting. Cast event gọi
 clip tên animation của CutoutPlayer qua adapter; báo lỗi clip không có, không
 đổi toàn bộ rig. Có cleanup khi đổi map, không tick hai lần hay nhân đôi VFX.
-Hit-marker chỉ tín hiệu visual, không trừ HP từ callback client. Khi có hits[]
-không chạy thêm hitAt. Server nạp chính bundle đã duyệt, lên lịch từng hitId
-theo skillHitTime, chống trùng theo cast + hitId + entity, tính flat/multiplier
-từ damage đã duyệt, chọn primary/area và kiểm tra radius theo đơn vị map.
-Server MMO phải xác thực learned skill, rank,
+Hit-marker chỉ tín hiệu visual. Server MMO phải xác thực learned skill, rank,
 mana, cooldown, trạng thái cast, range, hitbox và mục tiêu; server quyết định
 sát thương/status/XP/loot. Không dùng kết quả cooldown/chi phí của client để
 phát thưởng. Offline dùng local adapter cùng schema. SP/range/native multiplier

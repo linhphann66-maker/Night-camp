@@ -1,13 +1,12 @@
 import {connectSource} from '../source.mjs';
 import {mountSavedLibrary} from '../saved-library-ui.mjs';
 import {mountVfxSheetImport} from './sheet-import.mjs';
-import {mountAimHitEditor} from './aim-hit-editor.mjs';
 import {SKILL_RUNTIME_VERSION,SKILL_MOTIONS,SKILL_EASINGS,skillId,createSkillProject,validateSkillProject,newVisualSkill,drawSkillEvent,loadSkillImages,SkillPlayer,skillEventActive,skillEventGeometry,skillEventTransform,hitSkillEvent,motionDefaults} from './runtime.mjs';
 import {decimalNumber,tidyNumber,editSkillEvent,requiredSkillDuration} from './edit-model.mjs';
 const $=id=>document.getElementById(id),cv=$('preview'),ctx=cv.getContext('2d'),DRAFT='darkin.skill.studio.v1',VIEW=DRAFT+'.view',clone=structuredClone;
-let p=createSkillProject(),catalog,source,images=new Map(),selected=null,eventId=null,effect=null,page=0,playing=false,t=0,live=null,samplePreview=null,active=true,undo=[],redo=[],selectionRequest=0,busy=false,drag=null,flushing=false,aimHitEditor=null;
+let p=createSkillProject(),catalog,source,images=new Map(),selected=null,eventId=null,effect=null,page=0,playing=false,t=0,live=null,samplePreview=null,active=true,undo=[],redo=[],selectionRequest=0,busy=false,drag=null,flushing=false;
 const caster={x:0,y:0},target={x:180,y:0},pan={x:0,y:0},dirty=new Set();
-const skill=()=>p.skills[selected],event=()=>skill()?.events.find(e=>e.id===eventId),instance=()=>({caster,casterRef:caster,target,targetRef:target,project:p,skill:skill()});
+const skill=()=>p.skills[selected],event=()=>skill()?.events.find(e=>e.id===eventId),instance=()=>({caster,casterRef:caster,target});
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase();
 const msg=s=>$('status').textContent=s;
 const safe=fn=>async(...args)=>{try{await fn(...args)}catch(e){notice('Lỗi: '+e.message,true)}};
@@ -20,7 +19,7 @@ for(const id of [...Object.keys(skillFields),...Object.keys(eventFields)])if($(i
 $('motion').replaceChildren(...Object.entries(SKILL_MOTIONS).map(([id,name])=>new Option(name,id)));
 $('easing').replaceChildren(...Object.entries(SKILL_EASINGS).map(([id,name])=>new Option(name,id)));
 function notice(text,error=false){$('editNotice').textContent=text;$('editNotice').classList.toggle('error',error);msg(text)}
-function saveView(){try{localStorage.setItem(VIEW,JSON.stringify({project:p.id,selected,eventId,hitId:aimHitEditor?.selectedId,t,target,pan,panel:$('panel').value,tool:$('canvasTool').value,zoom:$('zoom').value}))}catch{}}
+function saveView(){try{localStorage.setItem(VIEW,JSON.stringify({project:p.id,selected,eventId,t,target,pan,panel:$('panel').value,tool:$('canvasTool').value,zoom:$('zoom').value}))}catch{}}
 function persist(){try{localStorage.setItem(DRAFT,JSON.stringify(p))}catch{msg('Nháp trình duyệt đầy. Bấm Lưu project để tải bản sao.')}saveView()}
 function stop(){playing=false;live=null;samplePreview=null;selectionRequest++;$('play').textContent='▶ Phát timeline'}
 function snapshot(){return {project:p,selected,eventId,t,target:{...target},pan:{...pan}}}
@@ -38,7 +37,7 @@ function modelValue(id){
 }
 function fill(id,value){const el=$(id);if(dirty.has(id))return;if(el.type==='checkbox')el.checked=!!value;else el.value=typeof value==='number'?tidyNumber(value):value??'';el.removeAttribute('aria-invalid')}
 function flush(){
- if(flushing)return true;if(!dirty.size)return aimHitEditor?.flush()??true;flushing=true;const ids=[...dirty];
+ if(flushing||!dirty.size)return true;flushing=true;const ids=[...dirty];
  try{
   const values=Object.fromEntries(ids.map(id=>[id,readInput(id)]));let next=clone(p),sid=selected,newSid=selected,extended=false;
   if(!skill())throw Error('Chọn một kỹ năng trước');const s=next.skills[sid];
@@ -50,7 +49,7 @@ function flush(){
   }
   const current=next.skills[sid],minimum=requiredSkillDuration(current);if(current.duration<minimum){current.duration=minimum;extended=true}
   if(newSid!==sid){delete next.skills[sid];current.id=newSid;next.skills[newSid]=current;sid=newSid}
-  validateSkillProject(next);dirty.clear();commit(next,{message:extended?'Đã lưu mốc; skill tự dài đến '+current.duration+' s để chứa đủ VFX.':'Đã lưu mốc và vị trí riêng của VFX.'});selected=sid;render();saveView();return aimHitEditor?.flush()??true;
+  validateSkillProject(next);dirty.clear();commit(next,{message:extended?'Đã lưu mốc; skill tự dài đến '+current.duration+' s để chứa đủ VFX.':'Đã lưu mốc và vị trí riêng của VFX.'});selected=sid;render();saveView();return true;
  }catch(e){dirty.clear();for(const id of ids)fill(id,modelValue(id));render();notice('Lỗi: '+e.message+' · đã giữ dữ liệu đã lưu, không đổi mốc khác.',true);return false}finally{flushing=false}
 }
 for(const id of [...Object.keys(skillFields),...Object.keys(eventFields)]){
@@ -76,7 +75,7 @@ function render(){
  $('projectId').value=p.id;$('projectName').value=p.name;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;
  $('play').disabled=!s;$('cast').disabled=!s||s.kind==='passive';$('addEffect').disabled=!effect||!s||busy;
  for(const id of ['cloneEvent','deleteEvent','goEvent','fitDuration'])$(id).disabled=!event();
- $('scrub').max=s?.duration||1;t=Math.max(0,Math.min(t,s?.duration||0));$('scrub').value=t;renderTracks();$('hitAt').disabled=!s||s.hits!==undefined;aimHitEditor?.refresh();
+ $('scrub').max=s?.duration||1;t=Math.max(0,Math.min(t,s?.duration||0));$('scrub').value=t;renderTracks();
 }
 function chooseEvent(id){if(!flush())return;stop();eventId=id;render();saveView()}
 on('skills','change',()=>{const id=$('skills').value;if(!flush())return;stop();selected=id;eventId=null;t=0;render();saveView()});
@@ -85,7 +84,7 @@ on('newSkill','click',()=>{const id=nextId('skill_',Object.keys(p.skills));mutat
 on('cloneSkill','click',()=>{if(!skill())return;const id=nextId('skill_',Object.keys(p.skills)),s=clone(skill());s.id=id;s.name+=' · bản sao';mutate(q=>q.skills[id]=s);selected=id;render()});
 on('deleteSkill','click',()=>{if(skill())mutate(q=>delete q.skills[selected])});
 on('cloneEvent','click',()=>{if(!event())return;const e=clone(event());e.id=nextId('event_',skill().events.map(e=>e.id));if(e.name)e.name+=' · bản sao';mutate(q=>q.skills[selected].events.push(e));eventId=e.id;render();saveView()});
-on('deleteEvent','click',()=>{if(!event())return;const count=skill().hits?.filter(h=>h.eventId===eventId).length||0;mutate(q=>{q.skills[selected].events=q.skills[selected].events.filter(e=>e.id!==eventId);if(q.skills[selected].hits)q.skills[selected].hits=q.skills[selected].hits.filter(h=>h.eventId!==eventId)});if(count)notice('Đã xóa VFX và '+count+' lần trúng gắn với nó; có thể Hoàn tác.')});
+on('deleteEvent','click',()=>{if(event())mutate(q=>q.skills[selected].events=q.skills[selected].events.filter(e=>e.id!==eventId))});
 on('fitDuration','click',()=>{if(skill())mutate(q=>q.skills[selected].duration=requiredSkillDuration(q.skills[selected]))});
 on('goEvent','click',()=>{if(!event())return;stop();t=tidyNumber(event().at+event().duration*.5);render();saveView();notice('Đang ở giữa mốc '+(event().name||eventId)+' · kéo khung để chỉnh riêng VFX này.')});
 on('returnTimeline','click',()=>{stop();render();saveView()});
@@ -102,7 +101,7 @@ on('addEffect','click',()=>{if(effect)return addEffect(effect)});
 on('play','click',()=>{if(!skill())return;const wasPlaying=playing;stop();playing=!wasPlaying;if(playing&&t>=skill().duration)t=0;$('play').textContent=playing?'Ⅱ Tạm dừng':'▶ Phát timeline';saveView()});
 on('stop','click',()=>{stop();t=0;render();saveView()});
 on('scrub','input',()=>{const next=Number($('scrub').value);if(!flush())return;stop();t=next;saveView()});
-on('cast','click',()=>{if(!skill())return;if(!live){stop();live=new SkillPlayer(p,{onEvent:e=>{if(e.type==='hit-marker'){aimHitEditor?.noteHit(e);msg('Mốc hit · '+e.skillId+' / '+e.hitId+' · chỉ tín hiệu, không gây sát thương')}}})}playing=false;$('play').textContent='▶ Phát timeline';const result=live.cast(selected,{caster,target,targetId:'preview-target'});msg(result?'Đang dùng thử · '+skill().name:'Skill bị động hoặc đang hồi chiêu: '+live.remaining(selected).toFixed(1)+' s')});
+on('cast','click',()=>{if(!skill())return;if(!live){stop();live=new SkillPlayer(p,{onEvent:e=>{if(e.type==='hit-marker')msg('Mốc hit · '+e.skillId+' · chỉ tín hiệu, không gây sát thương')}})}playing=false;$('play').textContent='▶ Phát timeline';const result=live.cast(selected,{caster,target});msg(result?'Đang dùng thử · '+skill().name:'Skill bị động hoặc đang hồi chiêu: '+live.remaining(selected).toFixed(1)+' s')});
 on('canvasTool','change',()=>{if(flush()){stop();saveView()}});on('solo','change',()=>{stop();saveView()});on('zoom','input',()=>saveView());
 function worldPoint(e){const r=cv.getBoundingClientRect(),z=Number($('zoom').value);return {x:(e.clientX-r.left-r.width/2)/z-pan.x,y:(e.clientY-r.top-r.height*.65)/z-pan.y}}
 function pickAt(pt){const s=skill();if(!s)return null;const visible=s.events.filter(e=>(!$('solo').checked||e.id===eventId)&&e.visible!==false),layer={low:0,high:1,glow:2};visible.sort((a,b)=>layer[a.layer]-layer[b.layer]);const order=[event(),...visible.reverse().filter(e=>e.id!==eventId)].filter(Boolean);return order.find(e=>hitSkillEvent(e,p.effects[e.effectId],instance(),t-e.at,pt.x,pt.y,12/Number($('zoom').value)))||null}
@@ -146,7 +145,7 @@ function frame(now){
   const s=skill(),drawn=[];
   const draw=layer=>{if(mode==='sample'){if(layer==='high'){const sp=samplePreview,f=sp.fx.frames?.[0],scale=f?Math.min(1,300/f.w,200/f.h):1;drawSkillEvent(ctx,{duration:sp.duration,scale,x:0,y:0,rotation:0,opacity:1,anchor:'caster',follow:false,motion:'still',blend:'normal'},sp.fx,instance(),Math.min((now-sp.started)/1000,sp.duration*.8),sp.images)}}else if(live)live.draw(ctx,images,{layer});else for(const e of s?.events||[])if(e.layer===layer&&(!$('solo').checked||e.id===eventId)){drawSkillEvent(ctx,e,p.effects[e.effectId],instance(),t-e.at,images);if(skillEventActive(e,t-e.at))drawn.push(e.id)}};
   draw('low');for(const[pt,color,label]of [[caster,'#d3ed92','Người phát'],[target,'#ffbd80','Mục tiêu']]){ctx.fillStyle='#0005';ctx.beginPath();ctx.ellipse(pt.x,pt.y,18,8,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.beginPath();ctx.arc(pt.x,pt.y-20,12,0,Math.PI*2);ctx.fill();ctx.font='12px system-ui';ctx.textAlign='center';ctx.fillText(label,pt.x,pt.y+22)}draw('high');if($('night').checked){ctx.fillStyle='#101a4b44';ctx.fillRect(-r.width/z-pan.x,-r.height/z-pan.y,r.width*2/z,r.height*2/z)}draw('glow');
-  if(mode==='timeline'&&event()&&$('canvasTool').value==='move')outline(event());if(mode==='timeline')aimHitEditor?.draw(ctx);
+  if(mode==='timeline'&&event()&&$('canvasTool').value==='move')outline(event());
   cv.dataset.activeEvents=drawn.join(',');$('scrub').value=t;$('time').textContent=(mode==='cast'?'Thử '+live.time.toFixed(2):t.toFixed(2))+' s';
   const e=event();$('eventStatus').textContent=e?(e.name||e.id)+' · '+e.at.toFixed(2)+' → '+tidyNumber(e.at+e.duration).toFixed(2)+' s · '+(e.visible===false?'đang ẩn':t<e.at?'chưa đến mốc':t>=e.at+e.duration?'đã hết mốc':'đang trong mốc')+(e.locked?' · khóa kéo':''):'Chọn mốc để chỉnh riêng từng VFX.';
  }requestAnimationFrame(frame);
@@ -154,10 +153,9 @@ function frame(now){
 const effectsShelf=mountSavedLibrary({kind:'effects',label:'Skill / VFX',anchor:$('save'),getProject:()=>p,portable:()=>portable({all:true}),beforeSave:()=>{if(!flush())throw Error('Sửa giá trị mốc chưa hợp lệ trước khi lưu');if(busy||drag)throw Error('Thả VFX / chờ tải xong trước khi lưu');stop()},load:async next=>{if(!flush())throw Error('Mốc chưa hợp lệ');if(busy||drag)throw Error('Đang tải / kéo VFX');next=clone(validateSkillProject(next));const loaded=await loadSkillImages(next,s=>source.assetURL(s));remember(snapshot());stop();p=next;images=loaded;selected=null;eventId=null;t=0;persist();render();},message:msg,download,afterSave:persist});
 const sheetImporter=mountVfxSheetImport({beforeOpen:()=>{if(!flush()||busy||drag)throw Error('Hoàn tất chỉnh mốc / chờ tải trước khi tách ảnh');stop()},onSelect:async(resource,{add,context})=>{effect=clone(resource.effect);$('effectInfo').textContent=effect.preview+' · '+effect.source;gallery();render();if(add&&context){if(p!==context.project||selected!==context.skill||!skill()?.events.some(e=>e.id===context.event))throw Error('Project/mốc đã đổi, bộ frame vẫn còn trong thư viện.');const temp=createSkillProject();temp.effects[effect.id]=effect;const loaded=await loadSkillImages(temp,s=>source.assetURL(s));if(p!==context.project)throw Error('Project vừa đổi');mutate(q=>{q.effects[effect.id]=clone(effect);q.skills[context.skill].events.find(e=>e.id===context.event).effectId=effect.id});for(const [src,im]of loaded)images.set(src,im);eventId=context.event;render();show('timeline');return {added:true,replaced:true}}if(add&&skill()){await addEffect(effect);return {added:true}}await previewEffect(effect);show('effects');return {added:false}},message:msg,download});
 const splitExisting=document.createElement('button');splitExisting.id='vfxSplitExisting';splitExisting.textContent='Tách ảnh của mốc đang chọn';$('cloneEvent').parentElement.after(splitExisting);splitExisting.onclick=safe(async()=>{if(!flush()||busy||drag)return;const fx=event()&&p.effects[event().effectId];if(!fx?.frames||fx.frames.length!==1)throw Error('Chọn mốc đang dùng một ảnh nguyên tấm. Với bộ nhiều frame, mở ảnh gốc từ thư viện để tách lại.');const context={project:p,skill:selected,event:eventId},f=fx.frames[0],im=images.get(f.src);if(!im)throw Error('Ảnh chưa tải xong');let src=f.src;if(!src.startsWith('data:image/')){const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);src=c.toDataURL('image/png')}await sheetImporter.openSource({src,name:fx.name},{context})});
-aimHitEditor=mountAimHitEditor({project:()=>p,skill,event,time:()=>t,instance,canvas:cv,worldPoint,flush,persist,show,message:msg,commit:(next,message)=>commit(next,{message}),selectEvent:id=>{eventId=id;render();saveView()},seek:time=>{stop();t=Math.max(0,Math.min(skill()?.duration||0,time));render();saveView()},tool:tool=>{stop();$('canvasTool').value=tool;cv.dataset.pointTool=String(['aim','hitPoint'].includes(tool));saveView()}});
 safe(async()=>{
  source=await connectSource(!!window.STUDIO_GITHUB,new URL('../',import.meta.url));const r=await fetch(new URL('./catalog.json',import.meta.url));if(!r.ok)throw Error('Không tải được thư viện');catalog=await r.json();
  try{const old=localStorage.getItem(DRAFT);if(old){const saved=clone(validateSkillProject(JSON.parse(old))),loaded=await loadSkillImages(saved,s=>source.assetURL(s));p=saved;images=loaded}}catch{notice('Không đọc được nháp, dữ liệu cũ chưa bị ghi đè. Mở file đã lưu nếu cần.',true)}
- render();try{const v=JSON.parse(localStorage.getItem(VIEW));if(v?.project===p.id){if(Object.hasOwn(p.skills,v.selected))selected=v.selected;if(p.skills[selected]?.events.some(e=>e.id===v.eventId))eventId=v.eventId;if(Number.isFinite(v.t))t=v.t;if(v.target&&[v.target.x,v.target.y].every(Number.isFinite))Object.assign(target,v.target);if(v.pan&&[v.pan.x,v.pan.y].every(Number.isFinite))Object.assign(pan,v.pan);if(['move','target','pan','aim','hitPoint'].includes(v.tool)){$('canvasTool').value=v.tool;cv.dataset.pointTool=String(['aim','hitPoint'].includes(v.tool))}aimHitEditor.restore(v.hitId);if(Number(v.zoom)>=.3&&Number(v.zoom)<=1.5)$('zoom').value=v.zoom;if([...$('panel').options].some(o=>o.value===v.panel))show(v.panel)}}catch{}
+ render();try{const v=JSON.parse(localStorage.getItem(VIEW));if(v?.project===p.id){if(Object.hasOwn(p.skills,v.selected))selected=v.selected;if(p.skills[selected]?.events.some(e=>e.id===v.eventId))eventId=v.eventId;if(Number.isFinite(v.t))t=v.t;if(v.target&&[v.target.x,v.target.y].every(Number.isFinite))Object.assign(target,v.target);if(v.pan&&[v.pan.x,v.pan.y].every(Number.isFinite))Object.assign(pan,v.pan);if(['move','target','pan'].includes(v.tool))$('canvasTool').value=v.tool;if(Number(v.zoom)>=.3&&Number(v.zoom)<=1.5)$('zoom').value=v.zoom;if([...$('panel').options].some(o=>o.value===v.panel))show(v.panel)}}catch{}
  nativeRows();gallery();render();notice('Sẵn sàng · chỉnh riêng từng VFX · '+Object.keys(SKILL_MOTIONS).length+' chuyển động · tự giữ đủ thời lượng');requestAnimationFrame(frame);
 })();

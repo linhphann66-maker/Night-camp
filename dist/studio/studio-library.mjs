@@ -1,6 +1,6 @@
 // Local, origin-scoped durable shelf. Image data is stored in IndexedDB, not localStorage.
 export const LIBRARY_FORMAT='darkin-studio-library-v1';
-export const LIBRARY_KINDS=['rigs','animations','accessories','pets','wings','maps','map-assets','effects','character-skills'];
+export const LIBRARY_KINDS=['rigs','animations','accessories','pets','wings','maps','map-assets','effects','character-skills','vfx-assets'];
 const DB='darkin.studio.library.v1',STORE='records';
 const valid=id=>typeof id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,159}$/.test(id)&&!['constructor','prototype','__proto__'].includes(id);
 let opening;

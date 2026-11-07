@@ -1,5 +1,44 @@
 # Skill & VFX Studio
 
+## Tải sprite sheet, tự tách frame và thư viện ảnh riêng
+
+Trong **Thư viện VFX → Tải ảnh / sprite sheet VFX · tự tách**, Studio mở bảng
+xem trước thay vì đưa cả tấm ảnh vào một frame. Tự nhận hàng/cột dựa trên các
+dải trống giữa ô; giữ nguyên một ảnh nếu không thấy lưới rõ. Đây không phải
+AI có thể đoán chính xác mọi sprite sheet. Với frame dính nhau, nền phức tạp
+hoặc lề không đều, chọn **Lưới tự nhập**, nhập cột/hàng và chỉnh lề/khe ngang,
+dọc. Không tách từng hạt rời thành frame riêng. Không tự xóa ảnh gốc.
+
+- Chạm ô/thumbnail để chọn hoặc bỏ từng frame; mặc định bỏ ô trống.
+- Chỉnh FPS, thứ tự theo hàng, theo cột hoặc đảo ngược; có preview phát thử.
+- Tất cả frame giữ chung canvas/kích thước và tâm neo, không tự co từng mảnh
+  theo bounding box gây nhảy kích thước. Cắt PNG riêng cho từng frame, giữ alpha.
+- **Tự bỏ nền phẳng ở mép ảnh** chỉ flood phần nền liên thông ra biên, không
+  xóa toàn bộ màu trắng/đen bên trong hình. Chọn **Giữ nguyên alpha / màu ảnh**
+  nếu không muốn xử lý nền. Đổi lưới/nền cần kiểm tra lại vùng chọn.
+- PNG/WebP/JPG tối đa 8 MB, mỗi chiều ≤8192, tổng ≤16 triệu pixel; tối đa
+  128 frame, FPS 1–60. Frame quá lớn được thu đồng đều về tối đa 2048 pixel
+  mỗi chiều khi cắt; ảnh gốc vẫn lưu nguyên. Bộ PNG nhúng tối đa 32 MB.
+
+**Tự lưu ảnh gốc và bộ frame vào thư viện** mặc định bật. Thư viện riêng
+**Ảnh VFX & bộ frame đã lưu** nằm ngay dưới nút tải ảnh, dùng IndexedDB cùng
+origin với Studio. Lưu cả ảnh gốc, PNG đã cắt, FPS, lưới, vùng chọn, thứ tự và
+ID hiệu ứng. Mở bộ đã lưu → Thêm VFX vào timeline, không cần upload lại; dùng
+được ở project khác. **Tách lại ảnh gốc thành bộ mới** tạo ID mới và giữ bản cũ.
+Thư viện project **Skill / VFX đã lưu** vẫn riêng, giữ nguyên cả thiết kế skill.
+Không tự đồng bộ trình duyệt/thiết bị; dùng **Sao lưu toàn bộ thư viện** / Nhập
+bản sao để chuyển máy. Lỗi quota báo rõ, không xóa các bản lưu cũ.
+
+Với ảnh đã đưa nguyên tấm vào timeline trước đây: chọn mốc → **Tách ảnh của
+mốc đang chọn**. Nếu bật Thay ảnh của mốc, Studio chỉ đổi effectId của đúng
+mốc đó, giữ ID mốc, thời gian, vị trí, chuyển động; không thêm một mốc chồng
+lên ảnh cũ. Có Hoàn tác/Làm lại. Ảnh mốc cũ vẫn còn để phục hồi.
+
+Project và skill-pack vẫn dùng `effect.frames[]` cũ; không cần runtime mới
+cho tính năng tách ảnh. Gói game nhúng PNG các frame đang dùng, kích thước,
+điểm neo và thời gian; không nhúng ảnh sprite sheet gốc hay toàn bộ thư viện
+tài nguyên. Bản sao thư viện riêng mới có ảnh gốc để tách lại về sau.
+
 ## Bản sửa trình biên tập · skill-runtime v2
 
 - **Bắt đầu 0,5 + Dài 0,8** được lưu thành mốc 0,50–1,30 giây. Nếu skill
